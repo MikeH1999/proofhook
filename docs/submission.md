@@ -54,8 +54,8 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 
 Calibration only, manual checks, one local signed receiver, JSON delivery persistence, and a single-instance optional scheduler. Mainnet, hosted notification channels, and multi-instance scheduling are intentionally outside the hackathon MVP.
 
-## Submission links to fill
+## Submission links
 
-- Repository: `<repository-url>`
-- Live demo: `<deployment-url>`
+- Repository: https://github.com/MikeH1999/proofhook
+- Live demo: https://proofhook-production.up.railway.app
 - Demo video: `<video-url>`

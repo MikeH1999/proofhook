@@ -2,6 +2,9 @@
 
 Proofhook turns Filecoin Onchain Cloud health into signed HTTP webhooks.
 
+- Live demo: https://proofhook-production.up.railway.app
+- Source: https://github.com/MikeH1999/proofhook
+
 The MVP connects MetaMask, discovers the connected wallet's FOC data sets on Calibration, reads PDP timing for a selected Piece, retrieves and validates every provider copy, then delivers a normalized event with an HMAC signature.
 
 ## MVP event types
@@ -113,6 +116,8 @@ const expected = createHmac('sha256', secret)
 ```
 
 ## Deployment
+
+The verified public deployment is available at `https://proofhook-production.up.railway.app`.
 
 The repository includes a production Dockerfile and Railway configuration. Set:
 

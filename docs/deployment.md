@@ -2,6 +2,8 @@
 
 ## Current readiness
 
+- Public deployment: `https://proofhook-production.up.railway.app`.
+- Public repository: `https://github.com/MikeH1999/proofhook`.
 - Production build: verified with `node dist/server.js`.
 - Runtime private key: not required.
 - Manual receiver URL: use `PROOFHOOK_DEMO_WEBHOOK_URL=auto`.
@@ -64,7 +66,7 @@ npx.cmd --yes @railway/cli@5.26.2 up --service proofhook --detach
 npx.cmd --yes @railway/cli@5.26.2 domain --service proofhook
 ```
 
-Record the generated domain as `<deployment-url>`.
+The generated production domain is `https://proofhook-production.up.railway.app`.
 
 ## 6. Public verification
 

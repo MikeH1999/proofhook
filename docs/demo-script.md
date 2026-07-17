@@ -4,7 +4,7 @@
 
 "Filecoin exposes verifiable storage state, but ordinary applications should not need to poll contracts, interpret PDP epochs, probe storage providers, and build retrying alert infrastructure."
 
-Open Proofhook and point out the Filecoin Calibration indicator.
+Open `https://proofhook-production.up.railway.app` and point out the Filecoin Calibration indicator.
 
 ## 10-25 seconds: wallet-scoped discovery
 
@@ -61,7 +61,7 @@ npm.cmd run verify:live
 npm.cmd run start:prod
 ```
 
-4. Confirm `http://127.0.0.1:3000/api/health`.
-5. Open `http://127.0.0.1:3000/` and run one health check before recording.
+4. Confirm `https://proofhook-production.up.railway.app/api/health`.
+5. Open the public deployment and run one health check before recording.
 
 The Web service does not require `FILECOIN_PRIVATE_KEY`; only the optional seed/info scripts use it.

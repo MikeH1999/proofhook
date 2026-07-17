@@ -93,3 +93,18 @@ After the first Filecoin-to-webhook vertical slice was proven, the UI was upgrad
 - Removed runtime dependence on `FILECOIN_PRIVATE_KEY`; public chain reads now power the Web service.
 
 The known two-provider Piece was then checked through the wallet endpoint. Both copies validated, the resulting health state was `healthy`, and the signed local receiver returned HTTP 202. The same PieceCID submitted under an unrelated wallet was rejected.
+
+## 8. Public deployment evidence
+
+Proofhook was deployed to Railway from its production Dockerfile with a persistent volume mounted at `/app/data`. The container entrypoint initializes the volume ownership and then drops privileges to the `node` user before starting the application.
+
+The public deployment at `https://proofhook-production.up.railway.app` was verified for:
+
+- `/api/health` returning `ok: true`.
+- The MetaMask wallet UI and official fox asset loading without browser console errors.
+- The test wallet resolving five onchain data sets and 62 active PieceCIDs.
+- The target Piece resolving to provider 4 and provider 2.
+- Both PDP states current and both provider retrievals passing PieceCID validation.
+- A `healthy` wallet-scoped event delivered in one attempt with HTTP 202.
+- The public demo receiver verifying the HMAC signature.
+- Wallet-filtered delivery history returning the connected wallet address.
