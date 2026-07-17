@@ -1,0 +1,26 @@
+{
+  "chain": "calibration",
+  "pieceCid": "bafkzcibd7abqltt56fv3bmluogfje7chexq4teeo6cyiyjz2eb2kcflkpj5uujak",
+  "size": 512,
+  "createdAt": "2026-07-16T13:25:34.261Z",
+  "transactionHashes": [
+    "0x4e4a6b1f55a448a3534c70f54f562f1d484c8b8cf50bc5c1da8f6d076eafeea9",
+    "0xb9e653ab677b012978b703ea4d353b9e2e003082261e2ba675f995aa5cb809ba"
+  ],
+  "copies": [
+    {
+      "providerId": "4",
+      "dataSetId": "19731",
+      "pieceId": "0",
+      "retrievalUrl": "https://caliberation-pdp.infrafolio.com/piece/bafkzcibd7abqltt56fv3bmluogfje7chexq4teeo6cyiyjz2eb2kcflkpj5uujak",
+      "role": "primary"
+    },
+    {
+      "providerId": "2",
+      "dataSetId": "19730",
+      "pieceId": "0",
+      "retrievalUrl": "https://calib2.ezpdpz.net/piece/bafkzcibd7abqltt56fv3bmluogfje7chexq4teeo6cyiyjz2eb2kcflkpj5uujak",
+      "role": "secondary"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+.env*
+!.env.example
+data/*.json
+!data/.gitkeep
+coverage/
+npm-debug.log*
+work/
+outputs/

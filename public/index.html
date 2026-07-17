@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Proofhook</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="Proofhook home">
+          <span class="brand-mark" aria-hidden="true">P</span>
+          <span>Proofhook</span>
+        </a>
+        <div class="header-actions">
+          <div class="network-status" id="network-status">
+            <span class="network-dot" aria-hidden="true"></span>
+            Calibration
+          </div>
+          <button class="metamask-button" id="wallet-button" type="button">
+            <img src="/metamask-fox.svg" alt="" aria-hidden="true" />
+            <span id="wallet-button-label">Connect MetaMask</span>
+          </button>
+          <button class="switch-wallet-button" id="switch-wallet" type="button" hidden>
+            Switch wallet
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="command-band">
+        <div class="command-inner">
+          <div>
+            <p class="eyebrow">FILECOIN HEALTH</p>
+            <h1>Webhook monitor</h1>
+          </div>
+          <div class="actions">
+            <button class="button button-secondary" id="send-test" type="button" disabled>Send test</button>
+            <button class="button button-primary" id="run-check" type="button" disabled>Run Filecoin check</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="summary-band" aria-live="polite">
+        <div class="summary-inner">
+          <div class="summary-item">
+            <span class="summary-label">Overall health</span>
+            <span class="status-badge status-unknown" id="overall-health">Not checked</span>
+          </div>
+          <div class="summary-item summary-cid">
+            <span class="summary-label">PieceCID</span>
+            <div class="inline-value">
+              <code id="piece-cid">Connect wallet</code>
+              <button class="text-button" id="copy-cid" type="button">Copy</button>
+            </div>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Last checked</span>
+            <span class="summary-value" id="last-checked">Never</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <section class="piece-picker" aria-live="polite">
+          <div class="piece-picker-copy">
+            <p class="eyebrow">WALLET SCOPE</p>
+            <h2>Your FOC storage</h2>
+            <p class="wallet-scope" id="wallet-scope">Connect MetaMask to discover Filecoin data sets.</p>
+          </div>
+          <div class="piece-control">
+            <label for="piece-select">Piece to monitor</label>
+            <select id="piece-select" disabled>
+              <option value="">Connect wallet first</option>
+            </select>
+            <span class="piece-meta" id="piece-meta">0 data sets | 0 pieces</span>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LIVE STORAGE</p>
+              <h2>Provider copies</h2>
+            </div>
+            <span class="section-count" id="copy-count">0 copies</span>
+          </div>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Data set</th>
+                  <th>PDP</th>
+                  <th>Retrieval</th>
+                  <th>Latency</th>
+                  <th>Next proof due</th>
+                </tr>
+              </thead>
+              <tbody id="provider-rows">
+                <tr><td colspan="6" class="empty-cell">Run a Filecoin check to load provider health.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section-block deliveries-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">HTTP DELIVERY</p>
+              <h2>Webhook deliveries</h2>
+            </div>
+            <span class="section-count" id="delivery-count">0 events</span>
+          </div>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Delivery</th>
+                  <th>HTTP</th>
+                  <th>Attempts</th>
+                  <th>Created</th>
+                  <th><span class="visually-hidden">Action</span></th>
+                </tr>
+              </thead>
+              <tbody id="delivery-rows">
+                <tr><td colspan="6" class="empty-cell">No webhook deliveries yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section-block payload-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">SIGNED EVENT</p>
+              <h2>Payload</h2>
+            </div>
+            <span class="signature-state" id="signature-state">No event selected</span>
+          </div>
+          <pre id="payload-view">Select a delivery to inspect its payload.</pre>
+        </section>
+      </div>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
