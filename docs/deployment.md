@@ -10,6 +10,7 @@
 - Health endpoint: `/api/health`.
 - Container and Railway definitions: included.
 - Persistent delivery history: mount a volume at `/app/data`.
+- Persistence verification: a service restart preserved the existing wallet delivery event.
 - Recommended replicas: one while JSON persistence and the optional in-process scheduler remain in scope.
 
 ## 1. Final local gate

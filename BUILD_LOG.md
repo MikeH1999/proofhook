@@ -108,3 +108,4 @@ The public deployment at `https://proofhook-production.up.railway.app` was verif
 - A `healthy` wallet-scoped event delivered in one attempt with HTTP 202.
 - The public demo receiver verifying the HMAC signature.
 - Wallet-filtered delivery history returning the connected wallet address.
+- A Railway service restart preserving the same delivery event ID on the `/app/data` volume.
