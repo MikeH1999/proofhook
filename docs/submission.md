@@ -41,6 +41,7 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 - Browser-supplied data-set IDs and retrieval URLs are not trusted by the wallet check endpoint.
 - Webhooks use HMAC-SHA256 signatures, URL validation, SSRF controls, and bounded retry.
 - Delivery history is filtered by the connected wallet address.
+- Public chain/retrieval operations are rate-limited, while unscoped logs and custom webhook targets require the production admin key.
 
 ## Live evidence
 
@@ -52,7 +53,7 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 
 ## MVP scope
 
-Calibration only, manual checks, one local signed receiver, JSON delivery persistence, and a single-instance optional scheduler. Mainnet, hosted notification channels, and multi-instance scheduling are intentionally outside the hackathon MVP.
+Calibration only, manual checks, one built-in signed receiver, JSON delivery persistence, and a single-instance optional scheduler. Mainnet, hosted notification channels, and multi-instance scheduling are intentionally outside the hackathon MVP.
 
 ## Submission links
 

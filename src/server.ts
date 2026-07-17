@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { resolve } from 'node:path'
+import fastifyRateLimit from '@fastify/rate-limit'
 import fastifyStatic from '@fastify/static'
 import Fastify from 'fastify'
 import { getAddress, isAddress } from 'viem'
@@ -18,9 +19,19 @@ import { DeliveryStore } from './storage/delivery-store.js'
 
 const config = loadConfig()
 const publicClient = createCalibrationPublicClient()
-const app = Fastify({ logger: true, bodyLimit: 256 * 1024 })
+const app = Fastify({ logger: true, bodyLimit: 256 * 1024, trustProxy: true })
 const deliveryStore = new DeliveryStore(config.deliveryLogPath)
 await deliveryStore.initialize()
+
+await app.register(fastifyRateLimit, {
+  global: false,
+  keyGenerator: (request) => request.ip,
+  errorResponseBuilder: (_request, context) => ({
+    statusCode: 429,
+    error: 'Too Many Requests',
+    message: `Rate limit exceeded. Retry in ${context.after}.`,
+  }),
+})
 
 await app.register(fastifyStatic, {
   root: resolve('public'),
@@ -67,8 +78,20 @@ function requestReceiverUrl(request: {
 function assertAdminAccess(request: { headers: Record<string, unknown> }): void {
   if (!config.adminKey) return
   const supplied = headerValue(request.headers['x-proofhook-api-key'] as string | string[] | undefined)
-  if (supplied !== config.adminKey) throw new Error('Invalid or missing Proofhook API key')
+  const expectedBytes = Buffer.from(config.adminKey)
+  const suppliedBytes = Buffer.from(supplied)
+  if (
+    suppliedBytes.length !== expectedBytes.length ||
+    !timingSafeEqual(suppliedBytes, expectedBytes)
+  ) {
+    throw new Error('Invalid or missing Proofhook API key')
+  }
 }
+
+const publicReadLimit = { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }
+const walletReadLimit = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }
+const webhookWriteLimit = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }
+const healthCheckLimit = { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }
 
 app.get('/api/health', async () => ({
   ok: true,
@@ -78,7 +101,7 @@ app.get('/api/health', async () => ({
   time: new Date().toISOString(),
 }))
 
-app.get('/api/demo-receipt', async (_request, reply) => {
+app.get('/api/demo-receipt', publicReadLimit, async (_request, reply) => {
   try {
     return await readReceipt(config.receiptPath)
   } catch (error) {
@@ -86,7 +109,7 @@ app.get('/api/demo-receipt', async (_request, reply) => {
   }
 })
 
-app.post('/demo/receiver', async (request, reply) => {
+app.post('/demo/receiver', webhookWriteLimit, async (request, reply) => {
   const rawBody = typeof request.body === 'string' ? request.body : ''
   const timestamp = headerValue(request.headers['x-proofhook-timestamp'])
   const signature = headerValue(request.headers['x-proofhook-signature'])
@@ -111,25 +134,37 @@ const walletAddressSchema = z
   .refine(isAddress, 'Expected a valid EVM wallet address')
   .transform((address) => getAddress(address))
 
-app.get('/demo/inbox', async (request) => {
-  const query = z.object({ walletAddress: walletAddressSchema.optional() }).parse(request.query)
-  const walletAddress = query.walletAddress?.toLowerCase()
-  return {
-    events: walletAddress
-      ? inbox.filter((entry) => {
-          const event = entry.event as { data?: { walletAddress?: string } }
-          return event.data?.walletAddress?.toLowerCase() === walletAddress
-        })
-      : inbox,
+app.get('/demo/inbox', publicReadLimit, async (request, reply) => {
+  try {
+    const query = z.object({ walletAddress: walletAddressSchema.optional() }).parse(request.query)
+    const walletAddress = query.walletAddress?.toLowerCase()
+    if (!walletAddress) assertAdminAccess(request)
+    return {
+      events: walletAddress
+        ? inbox.filter((entry) => {
+            const event = entry.event as { data?: { walletAddress?: string } }
+            return event.data?.walletAddress?.toLowerCase() === walletAddress
+          })
+        : inbox,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return reply.code(message.includes('API key') ? 401 : 400).send({ error: message })
   }
 })
 
-app.get('/api/deliveries', async (request) => {
-  const query = z.object({ walletAddress: walletAddressSchema.optional() }).parse(request.query)
-  return { deliveries: deliveryStore.list(50, query.walletAddress) }
+app.get('/api/deliveries', publicReadLimit, async (request, reply) => {
+  try {
+    const query = z.object({ walletAddress: walletAddressSchema.optional() }).parse(request.query)
+    if (!query.walletAddress) assertAdminAccess(request)
+    return { deliveries: deliveryStore.list(50, query.walletAddress) }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return reply.code(message.includes('API key') ? 401 : 400).send({ error: message })
+  }
 })
 
-app.get('/api/wallet/:address/datasets', async (request, reply) => {
+app.get('/api/wallet/:address/datasets', walletReadLimit, async (request, reply) => {
   try {
     const params = z.object({ address: walletAddressSchema }).parse(request.params)
     const storage = await getWalletStorage(publicClient, params.address)
@@ -140,7 +175,7 @@ app.get('/api/wallet/:address/datasets', async (request, reply) => {
   }
 })
 
-app.get('/api/wallet/:address/pieces', async (request, reply) => {
+app.get('/api/wallet/:address/pieces', walletReadLimit, async (request, reply) => {
   try {
     const params = z.object({ address: walletAddressSchema }).parse(request.params)
     return await getWalletStorage(publicClient, params.address)
@@ -150,40 +185,46 @@ app.get('/api/wallet/:address/pieces', async (request, reply) => {
   }
 })
 
-app.post('/api/test-webhook', async (request, reply) => {
-  const bodySchema = z.object({
-    webhookUrl: z.string().url().optional(),
-    walletAddress: walletAddressSchema.optional(),
-  })
-  const body = bodySchema.parse(parseJsonBody(request.body))
-  const event: ProofhookEvent = {
-    id: `evt_${randomUUID()}`,
-    type: 'webhook.test',
-    createdAt: new Date().toISOString(),
-    subscriptionId: 'demo-subscription',
-    chain: 'calibration',
-    data: {
-      message: 'Proofhook test event. This is not a Filecoin health event.',
-      ...(body.walletAddress ? { walletAddress: body.walletAddress } : {}),
-    },
+app.post('/api/test-webhook', webhookWriteLimit, async (request, reply) => {
+  try {
+    const bodySchema = z.object({
+      webhookUrl: z.string().url().optional(),
+      walletAddress: walletAddressSchema.optional(),
+    })
+    const body = bodySchema.parse(parseJsonBody(request.body))
+    if (body.webhookUrl) assertAdminAccess(request)
+    const event: ProofhookEvent = {
+      id: `evt_${randomUUID()}`,
+      type: 'webhook.test',
+      createdAt: new Date().toISOString(),
+      subscriptionId: 'demo-subscription',
+      chain: 'calibration',
+      data: {
+        message: 'Proofhook test event. This is not a Filecoin health event.',
+        ...(body.walletAddress ? { walletAddress: body.walletAddress } : {}),
+      },
+    }
+    const webhookUrl = (await assertSafeWebhookUrl(
+      body.webhookUrl ?? requestReceiverUrl(request),
+      config.allowPrivateWebhookUrls
+    )).toString()
+    const delivery = await deliverWebhookWithRetry(
+      webhookUrl,
+      event,
+      config.webhookSecret
+    )
+    await deliveryStore.append({
+      id: event.id,
+      createdAt: new Date().toISOString(),
+      event,
+      result: delivery,
+      webhookUrl,
+    })
+    return reply.code(delivery.ok ? 200 : 502).send({ event, delivery })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return reply.code(message.includes('API key') ? 401 : 400).send({ error: message })
   }
-  const webhookUrl = (await assertSafeWebhookUrl(
-    body.webhookUrl ?? requestReceiverUrl(request),
-    config.allowPrivateWebhookUrls
-  )).toString()
-  const delivery = await deliverWebhookWithRetry(
-    webhookUrl,
-    event,
-    config.webhookSecret
-  )
-  await deliveryStore.append({
-    id: event.id,
-    createdAt: new Date().toISOString(),
-    event,
-    result: delivery,
-    webhookUrl,
-  })
-  return reply.code(delivery.ok ? 200 : 502).send({ event, delivery })
 })
 
 async function runHealthCheck(
@@ -216,7 +257,7 @@ async function runDemoHealthCheck(rawWebhookUrl: string) {
   return runHealthCheck(receipt, rawWebhookUrl, 'demo-subscription')
 }
 
-app.post('/api/check', async (request, reply) => {
+app.post('/api/check', healthCheckLimit, async (request, reply) => {
   const bodySchema = z.object({
     subscriptionId: z.string().min(1).max(100),
     webhookUrl: z.string().url(),
@@ -239,7 +280,7 @@ app.post('/api/check', async (request, reply) => {
   }
 })
 
-app.post('/api/wallet/check', async (request, reply) => {
+app.post('/api/wallet/check', healthCheckLimit, async (request, reply) => {
   const bodySchema = z.object({
     walletAddress: walletAddressSchema,
     pieceCid: z.string().min(1).max(200),
@@ -248,6 +289,7 @@ app.post('/api/wallet/check', async (request, reply) => {
 
   try {
     const body = bodySchema.parse(parseJsonBody(request.body))
+    if (body.webhookUrl) assertAdminAccess(request)
     const storage = await getWalletStorage(publicClient, body.walletAddress)
     const selectedPiece = storage.pieces.find((piece) => piece.pieceCid === body.pieceCid)
     if (!selectedPiece) {
@@ -277,21 +319,24 @@ app.post('/api/wallet/check', async (request, reply) => {
     return reply.code(result.delivery.ok ? 200 : 502).send(result)
   } catch (error) {
     request.log.error(error)
-    return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) })
+    const message = error instanceof Error ? error.message : String(error)
+    return reply.code(message.includes('API key') ? 401 : 400).send({ error: message })
   }
 })
 
-app.post('/api/check-demo', async (request, reply) => {
+app.post('/api/check-demo', healthCheckLimit, async (request, reply) => {
   const bodySchema = z.object({ webhookUrl: z.string().url().optional() })
   const body = bodySchema.parse(parseJsonBody(request.body))
 
   try {
+    if (body.webhookUrl) assertAdminAccess(request)
     const result = await runDemoHealthCheck(body.webhookUrl ?? requestReceiverUrl(request))
     return reply.code(result.delivery.ok ? 200 : 502).send(result)
   } catch (error) {
     request.log.error(error)
-    return reply.code(503).send({
-      error: error instanceof Error ? error.message : String(error),
+    const message = error instanceof Error ? error.message : String(error)
+    return reply.code(message.includes('API key') ? 401 : 503).send({
+      error: message,
       hint: 'The public Calibration receipt or its provider may be temporarily unavailable.',
     })
   }

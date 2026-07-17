@@ -168,9 +168,9 @@ See `docs/deployment.md` for the complete GitHub and Railway runbook.
 - Calibration only.
 - MetaMask account and network detection.
 - Wallet-owned FOC data set and Piece discovery through public chain reads.
-- Manual health checks and a local signed receiver.
+- Manual health checks and a built-in signed receiver.
 - No mainnet support, payment alerts, or third-party notification channels yet.
 
 ## Security boundary
 
-The web service has no wallet key. A wallet check rebuilds provider and retrieval information from the connected address's onchain data sets; it does not trust browser-supplied data set IDs or provider URLs. Webhook requests are signed over `timestamp + "." + rawBody` with HMAC-SHA256. Arbitrary webhook URLs still pass URL and SSRF validation.
+The web service has no wallet key. A wallet check rebuilds provider and retrieval information from the connected address's onchain data sets; it does not trust browser-supplied data set IDs or provider URLs. Webhook requests are signed over `timestamp + "." + rawBody` with HMAC-SHA256. Public RPC/retrieval routes are rate-limited. Unscoped delivery history and caller-supplied webhook targets require the admin key when configured. Webhook URLs also pass HTTPS, credential, DNS, reserved-network, and private-network checks.

@@ -50,12 +50,12 @@ Generate a random webhook secret locally and keep it out of shell history where 
 npx.cmd --yes @railway/cli@5.26.2 init --name proofhook
 npx.cmd --yes @railway/cli@5.26.2 add --service proofhook `
   --variables "PROOFHOOK_WEBHOOK_SECRET=<random-32-byte-secret>" `
+  --variables "PROOFHOOK_ADMIN_KEY=<different-random-32-byte-secret>" `
   --variables "PROOFHOOK_DEMO_WEBHOOK_URL=auto" `
   --variables "PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS=false" `
   --variables "PROOFHOOK_SCHEDULE_SECONDS=0" `
   --variables "PROOFHOOK_RECEIPT_PATH=/app/fixtures/demo-receipt.json" `
   --variables "PROOFHOOK_DELIVERY_LOG_PATH=/app/data/delivery-log.json"
-npx.cmd --yes @railway/cli@5.26.2 volume add --service proofhook --mount-path /app/data
 ```
 
 `auto` derives the manual demo receiver from the public request host. If the scheduler is later enabled, replace it with the explicit public URL and set a non-zero schedule.
@@ -64,8 +64,14 @@ npx.cmd --yes @railway/cli@5.26.2 volume add --service proofhook --mount-path /a
 
 ```powershell
 npx.cmd --yes @railway/cli@5.26.2 up --service proofhook --detach
+$status = npx.cmd --yes @railway/cli@5.26.2 status --json | ConvertFrom-Json
+$environmentId = $status.environments.edges[0].node.id
+$serviceId = $status.services.edges[0].node.id
+npx.cmd --yes @railway/cli@5.26.2 volume --service $serviceId --environment $environmentId add --mount-path /app/data
 npx.cmd --yes @railway/cli@5.26.2 domain --service proofhook
 ```
+
+Using IDs from `status --json` avoids a Railway CLI name-resolution bug in `volume add`. Adding the volume triggers a redeploy.
 
 The generated production domain is `https://proofhook-production.up.railway.app`.
 

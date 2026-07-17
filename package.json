@@ -20,6 +20,7 @@
     "send:event": "tsx scripts/send-event.ts"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.1.0",
     "@fastify/static": "^10.1.0",
     "@filoz/synapse-core": "^0.7.0",
     "@filoz/synapse-sdk": "^1.1.0",

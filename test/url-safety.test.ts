@@ -11,6 +11,16 @@ describe('webhook URL safety', () => {
     assert.equal(isPrivateIp('8.8.8.8'), false)
   })
 
+  it('blocks non-public and IPv4-mapped network ranges', () => {
+    assert.equal(isPrivateIp('100.64.0.1'), true)
+    assert.equal(isPrivateIp('198.18.0.1'), true)
+    assert.equal(isPrivateIp('203.0.113.10'), true)
+    assert.equal(isPrivateIp('224.0.0.1'), true)
+    assert.equal(isPrivateIp('::ffff:127.0.0.1'), true)
+    assert.equal(isPrivateIp('2001:db8::1'), true)
+    assert.equal(isPrivateIp('2606:4700:4700::1111'), false)
+  })
+
   it('allows localhost HTTP only in local development mode', async () => {
     assert.equal((await assertSafeWebhookUrl('http://127.0.0.1:3000/hook', true)).hostname, '127.0.0.1')
     await assert.rejects(() => assertSafeWebhookUrl('http://127.0.0.1:3000/hook', false))

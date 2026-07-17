@@ -109,3 +109,9 @@ The public deployment at `https://proofhook-production.up.railway.app` was verif
 - The public demo receiver verifying the HMAC signature.
 - Wallet-filtered delivery history returning the connected wallet address.
 - A Railway service restart preserving the same delivery event ID on the `/app/data` volume.
+
+## 9. Final security and abuse-resistance audit
+
+The pre-submission audit added route-specific rate limits for public RPC, retrieval, and webhook operations. It also restricted unscoped delivery/inbox reads and caller-supplied webhook targets behind the production admin key, changed admin-key comparison to constant-time comparison, and expanded SSRF checks for carrier-grade NAT, reserved/documentation networks, multicast ranges, and IPv4-mapped IPv6 addresses.
+
+An integration smoke test confirmed wallet-scoped reads remain public, unscoped reads and custom targets return HTTP 401 without the admin key, signed self-delivery still succeeds, and the configured read limit returns 60 successful responses followed by HTTP 429.
