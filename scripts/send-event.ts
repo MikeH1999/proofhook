@@ -10,7 +10,8 @@ const client = createCalibrationPublicClient()
 const receipt = await readReceipt(config.receiptPath)
 const health = await checkReceipt(client, receipt)
 const event = buildHealthEvent(health)
-const delivery = await deliverWebhookWithRetry(config.demoWebhookUrl, event, config.webhookSecret)
+const webhookUrl = config.demoWebhookUrl ?? `http://127.0.0.1:${config.port}/demo/receiver`
+const delivery = await deliverWebhookWithRetry(webhookUrl, event, config.webhookSecret)
 
 console.log(JSON.stringify({ event, delivery }, null, 2))
 if (!delivery.ok) process.exitCode = 1

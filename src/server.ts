@@ -46,6 +46,24 @@ function headerValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
 }
 
+function requestReceiverUrl(request: {
+  headers: Record<string, unknown>
+  protocol: string
+}): string {
+  if (config.demoWebhookUrl) return config.demoWebhookUrl
+  const forwardedProtocol = headerValue(
+    request.headers['x-forwarded-proto'] as string | string[] | undefined
+  )
+    .split(',')[0]
+    ?.trim()
+  const protocol = forwardedProtocol === 'https' || forwardedProtocol === 'http'
+    ? forwardedProtocol
+    : request.protocol
+  const host = headerValue(request.headers.host as string | string[] | undefined)
+  if (!host) throw new Error('Cannot derive the demo receiver URL without a Host header')
+  return new URL('/demo/receiver', `${protocol}://${host}`).toString()
+}
+
 function assertAdminAccess(request: { headers: Record<string, unknown> }): void {
   if (!config.adminKey) return
   const supplied = headerValue(request.headers['x-proofhook-api-key'] as string | string[] | undefined)
@@ -150,7 +168,7 @@ app.post('/api/test-webhook', async (request, reply) => {
     },
   }
   const webhookUrl = (await assertSafeWebhookUrl(
-    body.webhookUrl ?? config.demoWebhookUrl,
+    body.webhookUrl ?? requestReceiverUrl(request),
     config.allowPrivateWebhookUrls
   )).toString()
   const delivery = await deliverWebhookWithRetry(
@@ -252,7 +270,7 @@ app.post('/api/wallet/check', async (request, reply) => {
     })
     const result = await runHealthCheck(
       receipt,
-      body.webhookUrl ?? config.demoWebhookUrl,
+      body.webhookUrl ?? requestReceiverUrl(request),
       `wallet:${body.walletAddress.toLowerCase()}`,
       body.walletAddress
     )
@@ -268,7 +286,7 @@ app.post('/api/check-demo', async (request, reply) => {
   const body = bodySchema.parse(parseJsonBody(request.body))
 
   try {
-    const result = await runDemoHealthCheck(body.webhookUrl ?? config.demoWebhookUrl)
+    const result = await runDemoHealthCheck(body.webhookUrl ?? requestReceiverUrl(request))
     return reply.code(result.delivery.ok ? 200 : 502).send(result)
   } catch (error) {
     request.log.error(error)
@@ -280,15 +298,19 @@ app.post('/api/check-demo', async (request, reply) => {
 })
 
 try {
+  const schedulerWebhookUrl = config.demoWebhookUrl
+  if (config.scheduleSeconds > 0 && !schedulerWebhookUrl) {
+    throw new Error('PROOFHOOK_DEMO_WEBHOOK_URL is required when the scheduler is enabled')
+  }
   await app.listen({ host: config.host, port: config.port })
 
-  if (config.scheduleSeconds > 0) {
+  if (config.scheduleSeconds > 0 && schedulerWebhookUrl) {
     let schedulerRunning = false
     const interval = setInterval(async () => {
       if (schedulerRunning) return
       schedulerRunning = true
       try {
-        const result = await runDemoHealthCheck(config.demoWebhookUrl)
+        const result = await runDemoHealthCheck(schedulerWebhookUrl)
         app.log.info(
           { eventId: result.event.id, state: result.health.state, delivered: result.delivery.ok },
           'Scheduled Filecoin check completed'

@@ -11,7 +11,7 @@ export interface AppConfig {
   host: string
   port: number
   webhookSecret: string
-  demoWebhookUrl: string
+  demoWebhookUrl: string | null
   receiptPath: string
   deliveryLogPath: string
   allowPrivateWebhookUrls: boolean
@@ -38,12 +38,16 @@ export function loadConfig(): AppConfig {
   if (!Number.isFinite(scheduleSeconds) || scheduleSeconds < 0) {
     throw new Error('PROOFHOOK_SCHEDULE_SECONDS must be zero or a positive number')
   }
+  const rawDemoWebhookUrl = process.env.PROOFHOOK_DEMO_WEBHOOK_URL?.trim()
 
   return {
     host: process.env.HOST ?? '127.0.0.1',
     port,
     webhookSecret: process.env.PROOFHOOK_WEBHOOK_SECRET ?? 'proofhook-local-development-secret',
-    demoWebhookUrl: process.env.PROOFHOOK_DEMO_WEBHOOK_URL ?? `http://127.0.0.1:${port}/demo/receiver`,
+    demoWebhookUrl:
+      rawDemoWebhookUrl && rawDemoWebhookUrl.toLowerCase() !== 'auto'
+        ? rawDemoWebhookUrl
+        : null,
     receiptPath: resolve(process.env.PROOFHOOK_RECEIPT_PATH ?? 'data/demo-receipt.json'),
     deliveryLogPath: resolve(process.env.PROOFHOOK_DELIVERY_LOG_PATH ?? 'data/delivery-log.json'),
     allowPrivateWebhookUrls: process.env.PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS !== 'false',

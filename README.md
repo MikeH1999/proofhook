@@ -118,16 +118,18 @@ The repository includes a production Dockerfile and Railway configuration. Set:
 
 ```text
 PROOFHOOK_WEBHOOK_SECRET=<random secret>
-PROOFHOOK_DEMO_WEBHOOK_URL=https://<deployment-domain>/demo/receiver
+PROOFHOOK_DEMO_WEBHOOK_URL=auto
 PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS=false
 PROOFHOOK_PROVIDER_IDS=4,2
-PROOFHOOK_SCHEDULE_SECONDS=300
+PROOFHOOK_SCHEDULE_SECONDS=0
 PROOFHOOK_RECEIPT_PATH=/app/fixtures/demo-receipt.json
 PROOFHOOK_DELIVERY_LOG_PATH=/app/data/delivery-log.json
 PROOFHOOK_ADMIN_KEY=<optional key for POST /api/check>
 ```
 
-No private key is required for deployment. The public Calibration receipt is included in `fixtures/demo-receipt.json` for the optional scheduler/demo endpoint. Mount a persistent Railway volume at `/app/data` for delivery history. Keep the service at one replica while the MVP uses its in-process scheduler.
+No private key or pre-known deployment domain is required. Manual checks derive the signed demo receiver URL from the current public request. If the optional scheduler is enabled, set `PROOFHOOK_DEMO_WEBHOOK_URL=https://<deployment-domain>/demo/receiver` explicitly. The public Calibration receipt is included in `fixtures/demo-receipt.json` for that scheduler/demo endpoint. Mount a persistent Railway volume at `/app/data` for delivery history. Keep the service at one replica while the MVP uses its in-process scheduler.
+
+See `docs/deployment.md` for the complete GitHub and Railway runbook.
 
 ## Checking an imported Synapse receipt
 
