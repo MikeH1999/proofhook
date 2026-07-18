@@ -45,6 +45,8 @@ const appBundle = await request('/app.bundle.js')
 assert(
   appPage.status === 200 &&
     appPage.text.includes('Upload to FOC') &&
+    appPage.text.includes('Choose file') &&
+    appPage.text.includes('No file selected') &&
     appPage.text.includes('Check every copy automatically') &&
     appPage.text.includes('Health run groups'),
   'FOC upload and scheduled monitor UI are deployed'
