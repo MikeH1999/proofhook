@@ -19,6 +19,8 @@ import { DeliveryStore } from './storage/delivery-store.js'
 import { verifyMonitorAuthorization } from './monitoring/authorization.js'
 import { MonitorStore } from './monitoring/store.js'
 import { publicMonitor, type MonitorPieceResult, type MonitorRun, type WalletMonitor } from './monitoring/types.js'
+import { mapWithConcurrency } from './monitoring/concurrency.js'
+import { InvalidWebhookRateGuard } from './webhooks/receiver-guard.js'
 
 const config = loadConfig()
 const publicClient = createCalibrationPublicClient()
@@ -28,6 +30,7 @@ await deliveryStore.initialize()
 const monitorStore = new MonitorStore(config.monitorStatePath)
 await monitorStore.initialize()
 const runningMonitors = new Set<string>()
+const invalidReceiverGuard = new InvalidWebhookRateGuard(10, 60_000)
 
 await app.register(fastifyRateLimit, {
   global: false,
@@ -117,11 +120,22 @@ app.get('/api/demo-receipt', publicReadLimit, async (_request, reply) => {
   }
 })
 
-app.post('/demo/receiver', webhookWriteLimit, async (request, reply) => {
+app.post('/demo/receiver', async (request, reply) => {
   const rawBody = typeof request.body === 'string' ? request.body : ''
   const timestamp = headerValue(request.headers['x-proofhook-timestamp'])
   const signature = headerValue(request.headers['x-proofhook-signature'])
   const signatureVerified = verifyWebhookSignature(rawBody, timestamp, signature, config.webhookSecret)
+
+  if (!signatureVerified) {
+    if (!invalidReceiverGuard.allow(request.ip)) {
+      return reply.code(429).send({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: 'Too many invalid webhook signatures. Retry in 60 seconds.',
+      })
+    }
+    return reply.code(401).send({ ok: false, error: 'Invalid signature' })
+  }
 
   let event: unknown
   try {
@@ -131,9 +145,8 @@ app.post('/demo/receiver', webhookWriteLimit, async (request, reply) => {
   }
 
   inbox.unshift({ receivedAt: new Date().toISOString(), signatureVerified, event })
-  if (inbox.length > 50) inbox.length = 50
+  if (inbox.length > 500) inbox.length = 500
 
-  if (!signatureVerified) return reply.code(401).send({ ok: false, error: 'Invalid signature' })
   return reply.code(202).send({ ok: true, accepted: headerValue(request.headers['x-proofhook-event-id']) })
 })
 
@@ -354,7 +367,7 @@ async function runScheduledMonitor(monitor: WalletMonitor): Promise<MonitorRun |
 
   try {
     const storage = await getWalletStorage(publicClient, monitor.walletAddress as Address)
-    const checked = await Promise.all(storage.pieces.map(async (piece): Promise<MonitorPieceResult> => {
+    const checked = await mapWithConcurrency(storage.pieces, 6, async (piece): Promise<MonitorPieceResult> => {
       try {
         const result = await runHealthCheck(
           receiptFromWalletPiece(piece),
@@ -386,7 +399,7 @@ async function runScheduledMonitor(monitor: WalletMonitor): Promise<MonitorRun |
           error: error instanceof Error ? error.message : String(error),
         }
       }
-    }))
+    })
     results.push(...checked)
   } catch (error) {
     runError = error instanceof Error ? error.message : String(error)

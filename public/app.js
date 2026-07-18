@@ -46,6 +46,7 @@ const elements = {
   monitorNextRun: document.querySelector('#monitor-next-run'),
   toast: document.querySelector('#toast'),
   uploadFile: document.querySelector('#upload-file'),
+  uploadFileName: document.querySelector('#upload-file-name'),
   uploadButton: document.querySelector('#upload-button'),
   uploadStatus: document.querySelector('#upload-status'),
   uploadProgress: document.querySelector('#upload-progress'),
@@ -606,6 +607,7 @@ elements.runCheck.addEventListener('click', runWalletCheck)
 elements.sendTest.addEventListener('click', sendTestWebhook)
 elements.uploadFile.addEventListener('change', () => {
   const file = elements.uploadFile.files?.[0]
+  elements.uploadFileName.textContent = file ? file.name : 'No file selected'
   elements.uploadResult.hidden = true
   elements.uploadResult.textContent = ''
   setUploadStatus(file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB ready` : 'Choose a file to begin.', 0)

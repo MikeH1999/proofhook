@@ -73,8 +73,9 @@
           </div>
           <div class="upload-control">
             <label class="file-picker" for="upload-file">
-              <span class="visually-hidden">Select a file to upload</span>
-              <input id="upload-file" type="file" />
+              <span class="file-picker-action">Choose file</span>
+              <span class="file-picker-name" id="upload-file-name">No file selected</span>
+              <input class="visually-hidden" id="upload-file" type="file" aria-label="Choose a file to upload" />
             </label>
             <button class="button button-primary" id="upload-button" type="button" disabled>Upload to FOC</button>
             <progress id="upload-progress" max="100" value="0"></progress>
