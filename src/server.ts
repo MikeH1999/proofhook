@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import fastifyRateLimit from '@fastify/rate-limit'
 import fastifyStatic from '@fastify/static'
 import Fastify from 'fastify'
-import { getAddress, isAddress } from 'viem'
+import { getAddress, isAddress, type Address, type Hex } from 'viem'
 import { z } from 'zod'
 import { loadConfig } from './config.js'
 import type { ProofhookEvent } from './domain/types.js'
@@ -16,12 +16,18 @@ import { buildHealthEvent } from './webhooks/events.js'
 import { verifyWebhookSignature } from './webhooks/signature.js'
 import { assertSafeWebhookUrl } from './webhooks/url-safety.js'
 import { DeliveryStore } from './storage/delivery-store.js'
+import { verifyMonitorAuthorization } from './monitoring/authorization.js'
+import { MonitorStore } from './monitoring/store.js'
+import { publicMonitor, type MonitorPieceResult, type MonitorRun, type WalletMonitor } from './monitoring/types.js'
 
 const config = loadConfig()
 const publicClient = createCalibrationPublicClient()
 const app = Fastify({ logger: true, bodyLimit: 256 * 1024, trustProxy: true })
 const deliveryStore = new DeliveryStore(config.deliveryLogPath)
 await deliveryStore.initialize()
+const monitorStore = new MonitorStore(config.monitorStatePath)
+await monitorStore.initialize()
+const runningMonitors = new Set<string>()
 
 await app.register(fastifyRateLimit, {
   global: false,
@@ -92,12 +98,14 @@ const publicReadLimit = { config: { rateLimit: { max: 60, timeWindow: '1 minute'
 const walletReadLimit = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }
 const webhookWriteLimit = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }
 const healthCheckLimit = { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }
+const monitorWriteLimit = { config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }
 
 app.get('/api/health', async () => ({
   ok: true,
   receiptPath: config.receiptPath,
   schedulerEnabled: config.scheduleSeconds > 0,
   scheduleSeconds: config.scheduleSeconds,
+  walletSchedulerEnabled: true,
   time: new Date().toISOString(),
 }))
 
@@ -185,6 +193,63 @@ app.get('/api/wallet/:address/pieces', walletReadLimit, async (request, reply) =
   }
 })
 
+app.get('/api/wallet/:address/monitor', walletReadLimit, async (request, reply) => {
+  try {
+    const params = z.object({ address: walletAddressSchema }).parse(request.params)
+    return {
+      monitor: publicMonitor(monitorStore.get(params.address)),
+      runs: monitorStore.listRuns(params.address, 20),
+    }
+  } catch (error) {
+    return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/wallet/monitor', monitorWriteLimit, async (request, reply) => {
+  const bodySchema = z.object({
+    walletAddress: walletAddressSchema,
+    intervalHours: z.number().int().min(1).max(168).default(3),
+    enabled: z.boolean().default(true),
+    runNow: z.boolean().default(true),
+    issuedAt: z.string().datetime(),
+    signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),
+  })
+  try {
+    const body = bodySchema.parse(parseJsonBody(request.body))
+    await verifyMonitorAuthorization({
+      walletAddress: body.walletAddress as Address,
+      intervalHours: body.intervalHours,
+      enabled: body.enabled,
+      runNow: body.runNow,
+      issuedAt: body.issuedAt,
+      signature: body.signature as Hex,
+    })
+    const targetUrl = config.demoWebhookUrl ?? (config.publicUrl
+      ? new URL('/demo/receiver', config.publicUrl).toString()
+      : requestReceiverUrl(request))
+    const webhookUrl = (await assertSafeWebhookUrl(
+      targetUrl,
+      config.allowPrivateWebhookUrls
+    )).toString()
+    const monitor = await monitorStore.upsert({
+      walletAddress: body.walletAddress,
+      intervalHours: body.intervalHours,
+      enabled: body.enabled,
+      runNow: body.runNow,
+      webhookUrl,
+      authorization: body.signature,
+    })
+    const run = body.enabled && body.runNow ? await runScheduledMonitor(monitor) : null
+    return {
+      monitor: publicMonitor(monitorStore.get(body.walletAddress)),
+      run,
+    }
+  } catch (error) {
+    request.log.error(error)
+    return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
 app.post('/api/test-webhook', webhookWriteLimit, async (request, reply) => {
   try {
     const bodySchema = z.object({
@@ -251,6 +316,120 @@ async function runHealthCheck(
   return { health, event, delivery }
 }
 
+type WalletPiece = Awaited<ReturnType<typeof getWalletStorage>>['pieces'][number]
+
+function receiptFromWalletPiece(piece: WalletPiece) {
+  return parseReceipt({
+    chain: 'calibration',
+    pieceCid: piece.pieceCid,
+    size: 1,
+    createdAt: new Date().toISOString(),
+    transactionHashes: [],
+    copies: piece.copies.map((copy, index) => ({
+      providerId: copy.providerId,
+      dataSetId: copy.dataSetId,
+      pieceId: copy.pieceId,
+      retrievalUrl: copy.retrievalUrl,
+      role: index === 0 ? 'primary' : 'secondary',
+    })),
+  })
+}
+
+function aggregateRunState(results: MonitorPieceResult[]): MonitorRun['state'] {
+  if (results.length === 0) return 'unknown'
+  if (results.some((result) => result.state === 'unhealthy')) return 'unhealthy'
+  if (results.some((result) => result.state === 'degraded')) return 'degraded'
+  if (results.some((result) => result.state === 'unknown')) return 'unknown'
+  return 'healthy'
+}
+
+async function runScheduledMonitor(monitor: WalletMonitor): Promise<MonitorRun | null> {
+  const key = monitor.walletAddress.toLowerCase()
+  if (runningMonitors.has(key)) return null
+  runningMonitors.add(key)
+  const startedAt = new Date()
+  const runId = `run_${randomUUID()}`
+  const results: MonitorPieceResult[] = []
+  let runError: string | null = null
+
+  try {
+    const storage = await getWalletStorage(publicClient, monitor.walletAddress as Address)
+    const checked = await Promise.all(storage.pieces.map(async (piece): Promise<MonitorPieceResult> => {
+      try {
+        const result = await runHealthCheck(
+          receiptFromWalletPiece(piece),
+          monitor.webhookUrl,
+          `scheduled:${runId}`,
+          monitor.walletAddress
+        )
+        return {
+          pieceCid: piece.pieceCid,
+          state: result.health.state,
+          copyCount: result.health.copies.length,
+          healthyCopyCount: result.health.copies.filter(
+            (copy) => copy.retrievalVerified && copy.proofOverdue === false
+          ).length,
+          eventId: result.event.id,
+          delivery: result.delivery,
+          health: result.health,
+          error: null,
+        }
+      } catch (error) {
+        return {
+          pieceCid: piece.pieceCid,
+          state: 'unknown',
+          copyCount: piece.copies.length,
+          healthyCopyCount: 0,
+          eventId: null,
+          delivery: null,
+          health: null,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }))
+    results.push(...checked)
+  } catch (error) {
+    runError = error instanceof Error ? error.message : String(error)
+  }
+
+  const completedAt = new Date()
+  const run: MonitorRun = {
+    id: runId,
+    walletAddress: monitor.walletAddress,
+    intervalHours: monitor.intervalHours,
+    startedAt: startedAt.toISOString(),
+    completedAt: completedAt.toISOString(),
+    state: aggregateRunState(results),
+    pieceCount: results.length,
+    copyCount: results.reduce((sum, result) => sum + result.copyCount, 0),
+    healthyCopyCount: results.reduce((sum, result) => sum + result.healthyCopyCount, 0),
+    webhooksDelivered: results.filter((result) => result.delivery?.ok).length,
+    webhooksTotal: results.filter((result) => result.delivery !== null).length,
+    results,
+    error: runError,
+  }
+  try {
+    await monitorStore.completeRun(run)
+    app.log.info(
+      { runId, walletAddress: monitor.walletAddress, state: run.state, pieces: run.pieceCount },
+      'Scheduled wallet health run completed'
+    )
+    return run
+  } finally {
+    runningMonitors.delete(key)
+  }
+}
+
+async function runDueWalletMonitors(): Promise<void> {
+  for (const monitor of monitorStore.due()) {
+    try {
+      await runScheduledMonitor(monitor)
+    } catch (error) {
+      app.log.error(error, 'Scheduled wallet health run failed')
+    }
+  }
+}
+
 
 async function runDemoHealthCheck(rawWebhookUrl: string) {
   const receipt = await readReceipt(config.receiptPath)
@@ -296,20 +475,7 @@ app.post('/api/wallet/check', healthCheckLimit, async (request, reply) => {
       throw new Error('The selected PieceCID does not belong to the connected wallet')
     }
 
-    const receipt = parseReceipt({
-      chain: 'calibration',
-      pieceCid: selectedPiece.pieceCid,
-      size: 1,
-      createdAt: new Date().toISOString(),
-      transactionHashes: [],
-      copies: selectedPiece.copies.map((copy, index) => ({
-        providerId: copy.providerId,
-        dataSetId: copy.dataSetId,
-        pieceId: copy.pieceId,
-        retrievalUrl: copy.retrievalUrl,
-        role: index === 0 ? 'primary' : 'secondary',
-      })),
-    })
+    const receipt = receiptFromWalletPiece(selectedPiece)
     const result = await runHealthCheck(
       receipt,
       body.webhookUrl ?? requestReceiverUrl(request),
@@ -348,6 +514,10 @@ try {
     throw new Error('PROOFHOOK_DEMO_WEBHOOK_URL is required when the scheduler is enabled')
   }
   await app.listen({ host: config.host, port: config.port })
+
+  void runDueWalletMonitors()
+  const walletScheduleInterval = setInterval(() => void runDueWalletMonitors(), 60_000)
+  walletScheduleInterval.unref()
 
   if (config.scheduleSeconds > 0 && schedulerWebhookUrl) {
     let schedulerRunning = false

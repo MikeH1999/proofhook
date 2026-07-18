@@ -98,6 +98,25 @@
           </div>
         </section>
 
+        <section class="monitor-panel" aria-labelledby="monitor-heading">
+          <div>
+            <p class="eyebrow">AUTOMATION</p>
+            <h2 id="monitor-heading">Check every copy automatically</h2>
+            <p class="monitor-description">Proofhook checks every PieceCID and every provider copy for this wallet, then sends one signed webhook per PieceCID.</p>
+          </div>
+          <div class="monitor-control">
+            <label for="monitor-interval">Interval</label>
+            <div class="interval-input">
+              <input id="monitor-interval" type="number" min="1" max="168" step="1" value="3" disabled />
+              <span>hours</span>
+            </div>
+            <button class="button button-primary" id="monitor-save" type="button" disabled>Enable &amp; run now</button>
+            <button class="button button-secondary" id="monitor-pause" type="button" hidden disabled>Pause</button>
+            <p class="monitor-status" id="monitor-status">Connect MetaMask to configure automatic checks.</p>
+            <p class="monitor-next">Next run: <strong id="monitor-next-run">Not scheduled</strong></p>
+          </div>
+        </section>
+
         <section class="section-block">
           <div class="section-heading">
             <div>
@@ -128,25 +147,26 @@
         <section class="section-block deliveries-section">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">HTTP DELIVERY</p>
-              <h2>Webhook deliveries</h2>
+              <p class="eyebrow">SCHEDULED MONITOR</p>
+              <h2>Health run groups</h2>
             </div>
-            <span class="section-count" id="delivery-count">0 events</span>
+            <span class="section-count" id="delivery-count">0 runs</span>
           </div>
           <div class="table-shell">
             <table>
               <thead>
                 <tr>
-                  <th>Event</th>
-                  <th>Delivery</th>
-                  <th>HTTP</th>
-                  <th>Attempts</th>
-                  <th>Created</th>
+                  <th>Completed</th>
+                  <th>Overall</th>
+                  <th>Pieces</th>
+                  <th>Healthy copies</th>
+                  <th>Webhooks</th>
+                  <th>Interval</th>
                   <th><span class="visually-hidden">Action</span></th>
                 </tr>
               </thead>
               <tbody id="delivery-rows">
-                <tr><td colspan="6" class="empty-cell">No webhook deliveries yet.</td></tr>
+                <tr><td colspan="7" class="empty-cell">No scheduled health runs yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -155,12 +175,12 @@
         <section class="section-block payload-section">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">SIGNED EVENT</p>
-              <h2>Payload</h2>
+              <p class="eyebrow">GROUP DETAILS</p>
+              <h2>Scheduled run</h2>
             </div>
-            <span class="signature-state" id="signature-state">No event selected</span>
+            <span class="signature-state" id="signature-state">No run selected</span>
           </div>
-          <pre id="payload-view">Select a delivery to inspect its payload.</pre>
+          <pre id="payload-view">Select a scheduled run to inspect every PieceCID and provider copy.</pre>
         </section>
       </div>
     </main>

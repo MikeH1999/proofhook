@@ -10,7 +10,7 @@ Applications that depend on Filecoin storage currently need to understand contra
 
 ## Product mechanism
 
-Connect MetaMask and either upload a file through Synapse SDK or select an existing Piece owned by that wallet. The upload goes directly to two FOC providers and commits the PieceCID under the current payer. Click **Run Filecoin check** and Proofhook verifies the wallet-to-data-set relationship onchain, checks every matching provider copy, and delivers one HMAC-signed HTTP event.
+Connect MetaMask and either upload a file through Synapse SDK or select existing Pieces owned by that wallet. Set an automatic interval (3 hours by default) and sign it with MetaMask. Proofhook immediately checks every PieceCID and every provider copy, then repeats in the Railway backend while the browser is closed. Every interval becomes one grouped UI result and sends one HMAC-signed event per PieceCID.
 
 ## User flow
 
@@ -20,9 +20,11 @@ MetaMask
   -> browser-to-FOC upload on providers 4 and 2
   -> MetaMask funding/approval + onchain PieceCID commit
   -> wallet-owned FOC data sets
-  -> active PieceCID selection
+  -> wallet-signed N-hour schedule (default 3h)
+  -> all PieceCIDs + all provider copies
   -> PDP + provider retrieval verification
-  -> signed webhook with retry and delivery history
+  -> signed webhooks with retry
+  -> one grouped result per scheduled run
 ```
 
 Changing accounts through **Switch wallet** immediately clears the previous account's Piece, health, provider, and webhook views. Wallets without FOC storage receive an empty state, never demo data.
@@ -35,6 +37,7 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 - PDP active pieces, challenge epochs, proving windows, and deadlines.
 - Service Provider Registry IDs and PDP service URLs.
 - Independent retrieval validation across multiple provider copies.
+- Persistent wallet schedules and grouped all-copy health runs.
 - Filecoin Calibration network through public RPC reads.
 
 ## Security boundary
@@ -45,6 +48,7 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 - Browser-supplied data-set IDs and retrieval URLs are not trusted by the wallet check endpoint.
 - Webhooks use HMAC-SHA256 signatures, URL validation, SSRF controls, and bounded retry.
 - Delivery history is filtered by the connected wallet address.
+- Schedule changes require a fresh MetaMask signature from that same wallet.
 - Public chain/retrieval operations are rate-limited, while unscoped logs and custom webhook targets require the production admin key.
 
 ## Live evidence

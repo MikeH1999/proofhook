@@ -14,6 +14,8 @@ export interface AppConfig {
   demoWebhookUrl: string | null
   receiptPath: string
   deliveryLogPath: string
+  monitorStatePath: string
+  publicUrl: string | null
   allowPrivateWebhookUrls: boolean
   scheduleSeconds: number
   adminKey: string | null
@@ -39,6 +41,8 @@ export function loadConfig(): AppConfig {
     throw new Error('PROOFHOOK_SCHEDULE_SECONDS must be zero or a positive number')
   }
   const rawDemoWebhookUrl = process.env.PROOFHOOK_DEMO_WEBHOOK_URL?.trim()
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim()
+  const rawPublicUrl = process.env.PROOFHOOK_PUBLIC_URL?.trim() || (railwayDomain ? `https://${railwayDomain}` : '')
 
   return {
     host: process.env.HOST ?? '127.0.0.1',
@@ -50,6 +54,8 @@ export function loadConfig(): AppConfig {
         : null,
     receiptPath: resolve(process.env.PROOFHOOK_RECEIPT_PATH ?? 'data/demo-receipt.json'),
     deliveryLogPath: resolve(process.env.PROOFHOOK_DELIVERY_LOG_PATH ?? 'data/delivery-log.json'),
+    monitorStatePath: resolve(process.env.PROOFHOOK_MONITOR_STATE_PATH ?? 'data/monitor-state.json'),
+    publicUrl: rawPublicUrl ? new URL(rawPublicUrl).toString() : null,
     allowPrivateWebhookUrls: process.env.PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS !== 'false',
     scheduleSeconds,
     adminKey: process.env.PROOFHOOK_ADMIN_KEY?.trim() || null,

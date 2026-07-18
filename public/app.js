@@ -1,5 +1,5 @@
 import { Synapse, calibration } from '@filoz/synapse-sdk'
-import { custom, getAddress } from 'viem'
+import { custom, getAddress, stringToHex } from 'viem'
 
 const CALIBRATION_CHAIN_ID = '0x4cb2f'
 const CALIBRATION_CHAIN_ID_DECIMAL = 314159
@@ -13,8 +13,8 @@ const state = {
   pieces: [],
   selectedPiece: null,
   health: null,
-  deliveries: [],
-  inbox: [],
+  monitor: null,
+  monitorRuns: [],
   loadVersion: 0,
   uploading: false,
 }
@@ -39,6 +39,11 @@ const elements = {
   deliveryRows: document.querySelector('#delivery-rows'),
   payloadView: document.querySelector('#payload-view'),
   signatureState: document.querySelector('#signature-state'),
+  monitorInterval: document.querySelector('#monitor-interval'),
+  monitorSave: document.querySelector('#monitor-save'),
+  monitorPause: document.querySelector('#monitor-pause'),
+  monitorStatus: document.querySelector('#monitor-status'),
+  monitorNextRun: document.querySelector('#monitor-next-run'),
   toast: document.querySelector('#toast'),
   uploadFile: document.querySelector('#upload-file'),
   uploadButton: document.querySelector('#upload-button'),
@@ -112,14 +117,22 @@ function setUploadStatus(message, progress = null) {
   }
 }
 
+function updateMonitorAvailability() {
+  const ready = Boolean(state.walletAddress && isCalibration())
+  elements.monitorInterval.disabled = !ready
+  elements.monitorSave.disabled = !ready
+  elements.monitorPause.disabled = !ready
+  elements.monitorPause.hidden = !state.monitor?.enabled
+}
+
 function clearWalletData(message = 'Connect MetaMask to discover Filecoin data sets.') {
   state.loadVersion += 1
   state.dataSets = []
   state.pieces = []
   state.selectedPiece = null
   state.health = null
-  state.deliveries = []
-  state.inbox = []
+  state.monitor = null
+  state.monitorRuns = []
 
   elements.walletScope.textContent = message
   elements.pieceSelect.disabled = true
@@ -131,14 +144,18 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.lastChecked.textContent = 'Never'
   elements.copyCount.textContent = '0 copies'
   elements.providerRows.innerHTML = `<tr><td colspan="6" class="empty-cell">${escapeHtml(message)}</td></tr>`
-  elements.deliveryCount.textContent = '0 events'
-  elements.deliveryRows.innerHTML = '<tr><td colspan="6" class="empty-cell">No webhook deliveries for this wallet.</td></tr>'
-  elements.payloadView.textContent = 'Select a delivery to inspect its payload.'
-  elements.signatureState.textContent = 'No event selected'
+  elements.deliveryCount.textContent = '0 runs'
+  elements.deliveryRows.innerHTML = '<tr><td colspan="7" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
+  elements.payloadView.textContent = 'Select a scheduled run to inspect every PieceCID and provider copy.'
+  elements.signatureState.textContent = 'No run selected'
   elements.signatureState.className = 'signature-state'
+  elements.monitorInterval.value = '3'
+  elements.monitorStatus.textContent = state.walletAddress ? 'No schedule configured.' : 'Connect MetaMask to configure automatic checks.'
+  elements.monitorNextRun.textContent = 'Not scheduled'
   elements.runCheck.disabled = true
   elements.sendTest.disabled = !state.walletAddress || !isCalibration()
   updateUploadAvailability()
+  updateMonitorAvailability()
 }
 
 function renderWalletButton() {
@@ -224,50 +241,62 @@ function renderHealth() {
   }).join('')
 }
 
-function deliverySignature(eventId) {
-  return state.inbox.find((entry) => entry.event?.id === eventId)?.signatureVerified ?? null
+function renderMonitor() {
+  if (!state.monitor) {
+    elements.monitorStatus.textContent = 'No schedule configured. Default interval: 3 hours.'
+    elements.monitorNextRun.textContent = 'Not scheduled'
+    elements.monitorInterval.value = '3'
+  } else {
+    elements.monitorInterval.value = String(state.monitor.intervalHours)
+    elements.monitorStatus.textContent = state.monitor.enabled
+      ? `Enabled · every ${state.monitor.intervalHours} ${state.monitor.intervalHours === 1 ? 'hour' : 'hours'}`
+      : 'Paused'
+    elements.monitorNextRun.textContent = state.monitor.nextRunAt
+      ? formatDate(state.monitor.nextRunAt)
+      : 'Not scheduled'
+  }
+  elements.monitorSave.textContent = state.monitor ? 'Update & run now' : 'Enable & run now'
+  updateMonitorAvailability()
 }
 
-function renderDeliveries() {
-  elements.deliveryCount.textContent = `${state.deliveries.length} events`
-  if (state.deliveries.length === 0) {
-    elements.deliveryRows.innerHTML = '<tr><td colspan="6" class="empty-cell">No webhook deliveries for this wallet.</td></tr>'
+function renderMonitorRuns() {
+  elements.deliveryCount.textContent = `${state.monitorRuns.length} runs`
+  if (state.monitorRuns.length === 0) {
+    elements.deliveryRows.innerHTML = '<tr><td colspan="7" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
     return
   }
-  elements.deliveryRows.innerHTML = state.deliveries.map((record, index) => `
+  elements.deliveryRows.innerHTML = state.monitorRuns.map((run, index) => `
     <tr>
-      <td><code>${escapeHtml(record.event.type)}</code></td>
-      <td><span class="table-status ${record.result.ok ? 'status-success' : 'status-failed'}">${record.result.ok ? 'Delivered' : 'Failed'}</span></td>
-      <td>${record.result.status ?? '-'}</td>
-      <td>${record.result.attempts}</td>
-      <td>${escapeHtml(formatDate(record.createdAt))}</td>
-      <td><button class="row-action" type="button" data-delivery-index="${index}">View</button></td>
+      <td>${escapeHtml(formatDate(run.completedAt))}</td>
+      <td><span class="table-status ${statusClass(run.state)}">${escapeHtml(run.state)}</span></td>
+      <td>${run.pieceCount}</td>
+      <td>${run.healthyCopyCount}/${run.copyCount}</td>
+      <td>${run.webhooksDelivered}/${run.webhooksTotal}</td>
+      <td>${run.intervalHours}h</td>
+      <td><button class="row-action" type="button" data-run-index="${index}">View</button></td>
     </tr>
   `).join('')
 }
 
-function selectDelivery(index) {
-  const record = state.deliveries[index]
-  if (!record) return
-  elements.payloadView.textContent = JSON.stringify(record.event, null, 2)
-  const verified = deliverySignature(record.event.id)
-  elements.signatureState.textContent = verified === true ? 'HMAC verified' : verified === false ? 'HMAC failed' : 'Receiver not inspected'
-  elements.signatureState.className = `signature-state ${verified === true ? 'signature-ok' : verified === false ? 'signature-failed' : ''}`
+function selectMonitorRun(index) {
+  const run = state.monitorRuns[index]
+  if (!run) return
+  elements.payloadView.textContent = JSON.stringify(run, null, 2)
+  const delivered = run.webhooksTotal > 0 && run.webhooksDelivered === run.webhooksTotal
+  elements.signatureState.textContent = delivered ? 'All webhooks accepted' : `${run.webhooksDelivered}/${run.webhooksTotal} webhooks accepted`
+  elements.signatureState.className = `signature-state ${delivered ? 'signature-ok' : 'signature-failed'}`
 }
 
-async function refreshLogs() {
+async function refreshMonitor() {
   if (!state.walletAddress) return
   const address = state.walletAddress
-  const wallet = encodeURIComponent(address)
-  const [deliveries, inbox] = await Promise.all([
-    request(`/api/deliveries?walletAddress=${wallet}`),
-    request(`/demo/inbox?walletAddress=${wallet}`),
-  ])
+  const response = await request(`/api/wallet/${encodeURIComponent(address)}/monitor`)
   if (address !== state.walletAddress) return
-  state.deliveries = deliveries.deliveries
-  state.inbox = inbox.events
-  renderDeliveries()
-  if (state.deliveries.length > 0) selectDelivery(0)
+  state.monitor = response.monitor
+  state.monitorRuns = response.runs
+  renderMonitor()
+  renderMonitorRuns()
+  if (state.monitorRuns.length > 0) selectMonitorRun(0)
 }
 
 async function loadWalletStorage(preferredPieceCid) {
@@ -282,11 +311,60 @@ async function loadWalletStorage(preferredPieceCid) {
     state.dataSets = storage.dataSets
     state.pieces = storage.pieces
     renderPieceSelection(preferredPieceCid)
-    await refreshLogs()
+    await refreshMonitor()
   } catch (error) {
     if (version !== state.loadVersion) return
     clearWalletData(`Could not load this wallet: ${error.message}`)
     showToast(error.message, true)
+  }
+}
+
+function monitorAuthorizationMessage(walletAddress, intervalHours, enabled, runNow, issuedAt) {
+  return [
+    'Proofhook scheduled monitor',
+    `Wallet: ${getAddress(walletAddress)}`,
+    `Interval hours: ${intervalHours}`,
+    `Enabled: ${enabled ? 'yes' : 'no'}`,
+    `Run now: ${runNow ? 'yes' : 'no'}`,
+    `Issued at: ${issuedAt}`,
+  ].join('\n')
+}
+
+async function saveMonitor(enabled, runNow) {
+  if (!state.walletAddress || !isCalibration()) return
+  const intervalHours = Number(elements.monitorInterval.value || 3)
+  if (!Number.isInteger(intervalHours) || intervalHours < 1 || intervalHours > 168) {
+    showToast('Interval must be a whole number from 1 to 168 hours', true)
+    return
+  }
+  const walletAddress = state.walletAddress
+  const issuedAt = new Date().toISOString()
+  const message = monitorAuthorizationMessage(walletAddress, intervalHours, enabled, runNow, issuedAt)
+  const original = elements.monitorSave.textContent
+  elements.monitorSave.disabled = true
+  elements.monitorPause.disabled = true
+  elements.monitorStatus.textContent = enabled && runNow
+    ? 'Confirm in MetaMask, then checking every PieceCID and copy...'
+    : 'Confirm this schedule change in MetaMask...'
+  try {
+    const signature = await window.ethereum.request({
+      method: 'personal_sign',
+      params: [stringToHex(message), walletAddress],
+    })
+    await request('/api/wallet/monitor', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ walletAddress, intervalHours, enabled, runNow, issuedAt, signature }),
+    })
+    if (walletAddress !== state.walletAddress) return
+    await refreshMonitor()
+    showToast(enabled ? `Automatic checks set to every ${intervalHours}h` : 'Automatic checks paused')
+  } catch (error) {
+    showToast(error.message ?? 'Could not update automatic checks', true)
+    await refreshMonitor().catch(() => {})
+  } finally {
+    elements.monitorSave.textContent = original
+    updateMonitorAvailability()
   }
 }
 
@@ -479,7 +557,7 @@ async function runWalletCheck() {
     if (walletAddress !== state.walletAddress || pieceCid !== state.selectedPiece?.pieceCid) return
     state.health = result.health
     renderHealth()
-    await refreshLogs()
+    await refreshMonitor()
     showToast('Filecoin health event delivered')
   } catch (error) {
     showToast(error.message, true)
@@ -502,7 +580,6 @@ async function sendTestWebhook() {
       body: JSON.stringify({ walletAddress }),
     })
     if (walletAddress !== state.walletAddress) return
-    await refreshLogs()
     showToast('Test webhook delivered')
   } catch (error) {
     showToast(error.message, true)
@@ -535,14 +612,17 @@ elements.uploadFile.addEventListener('change', () => {
   updateUploadAvailability()
 })
 elements.uploadButton.addEventListener('click', uploadToFoc)
+elements.monitorSave.addEventListener('click', () => saveMonitor(true, true))
+elements.monitorPause.addEventListener('click', () => saveMonitor(false, false))
+elements.monitorInterval.addEventListener('input', updateMonitorAvailability)
 elements.copyCid.addEventListener('click', async () => {
   if (!state.selectedPiece) return
   await navigator.clipboard.writeText(state.selectedPiece.pieceCid)
   showToast('PieceCID copied')
 })
 elements.deliveryRows.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-delivery-index]')
-  if (button) selectDelivery(Number(button.dataset.deliveryIndex))
+  const button = event.target.closest('[data-run-index]')
+  if (button) selectMonitorRun(Number(button.dataset.runIndex))
 })
 
 if (window.ethereum) {

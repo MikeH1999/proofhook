@@ -55,10 +55,11 @@ npx.cmd --yes @railway/cli@5.26.2 add --service proofhook `
   --variables "PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS=false" `
   --variables "PROOFHOOK_SCHEDULE_SECONDS=0" `
   --variables "PROOFHOOK_RECEIPT_PATH=/app/fixtures/demo-receipt.json" `
-  --variables "PROOFHOOK_DELIVERY_LOG_PATH=/app/data/delivery-log.json"
+  --variables "PROOFHOOK_DELIVERY_LOG_PATH=/app/data/delivery-log.json" `
+  --variables "PROOFHOOK_MONITOR_STATE_PATH=/app/data/monitor-state.json"
 ```
 
-`auto` derives the manual demo receiver from the public request host. If the scheduler is later enabled, replace it with the explicit public URL and set a non-zero schedule.
+`auto` derives the manual demo receiver from the public request host. Wallet schedules use Railway's automatic `RAILWAY_PUBLIC_DOMAIN`; set `PROOFHOOK_PUBLIC_URL` explicitly on another hosting platform.
 
 ## 5. Upload and deploy
 

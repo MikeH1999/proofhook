@@ -42,12 +42,20 @@ assert(health.status === 200 && health.body.ok === true, 'health endpoint is rea
 
 const appPage = await request('/')
 const appBundle = await request('/app.bundle.js')
-assert(appPage.status === 200 && appPage.text.includes('Upload to FOC'), 'FOC upload UI is deployed')
+assert(
+  appPage.status === 200 &&
+    appPage.text.includes('Upload to FOC') &&
+    appPage.text.includes('Check every copy automatically') &&
+    appPage.text.includes('Health run groups'),
+  'FOC upload and scheduled monitor UI are deployed'
+)
 assert(appBundle.status === 200 && appBundle.text.length > 100_000, 'Synapse browser bundle is deployed')
 
 const storage = await request(`/api/wallet/${walletAddress}/pieces`)
+const scheduledMonitor = await request(`/api/wallet/${walletAddress}/monitor`)
 const targetPiece = storage.body.pieces?.find((piece: any) => piece.pieceCid === pieceCid)
 assert(storage.status === 200, 'wallet storage endpoint responds')
+assert(scheduledMonitor.status === 200 && Array.isArray(scheduledMonitor.body.runs), 'wallet schedule groups are readable')
 assert(storage.body.address?.toLowerCase() === walletAddress.toLowerCase(), 'storage is scoped to the requested wallet')
 assert(storage.body.dataSets?.length === 5, 'wallet exposes five FOC data sets')
 assert(targetPiece?.copies?.length === 2, 'target PieceCID has two provider copies')
