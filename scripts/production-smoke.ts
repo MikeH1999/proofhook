@@ -6,6 +6,7 @@ const pieceCid = 'bafkzcibd7abqltt56fv3bmluogfje7chexq4teeo6cyiyjz2eb2kcflkpj5uu
 interface HttpResult {
   status: number
   body: Record<string, any>
+  text: string
 }
 
 async function request(path: string, init?: RequestInit, timeoutMs = 120_000): Promise<HttpResult> {
@@ -20,7 +21,7 @@ async function request(path: string, init?: RequestInit, timeoutMs = 120_000): P
   } catch {
     body = { text: text.slice(0, 500) }
   }
-  return { status: response.status, body }
+  return { status: response.status, body, text }
 }
 
 function jsonPost(body: unknown): RequestInit {
@@ -38,6 +39,11 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const health = await request('/api/health')
 assert(health.status === 200 && health.body.ok === true, 'health endpoint is ready')
+
+const appPage = await request('/')
+const appBundle = await request('/app.bundle.js')
+assert(appPage.status === 200 && appPage.text.includes('Upload to FOC'), 'FOC upload UI is deployed')
+assert(appBundle.status === 200 && appBundle.text.length > 100_000, 'Synapse browser bundle is deployed')
 
 const storage = await request(`/api/wallet/${walletAddress}/pieces`)
 const targetPiece = storage.body.pieces?.find((piece: any) => piece.pieceCid === pieceCid)

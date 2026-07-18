@@ -5,7 +5,7 @@ Proofhook turns Filecoin Onchain Cloud health into signed HTTP webhooks.
 - Live demo: https://proofhook-production.up.railway.app
 - Source: https://github.com/MikeH1999/proofhook
 
-The MVP connects MetaMask, discovers the connected wallet's FOC data sets on Calibration, reads PDP timing for a selected Piece, retrieves and validates every provider copy, then delivers a normalized event with an HMAC signature.
+The MVP connects MetaMask, uploads a file directly from the browser to two FOC providers, discovers the connected wallet's FOC data sets on Calibration, reads PDP timing for a selected Piece, retrieves and validates every provider copy, then delivers a normalized event with an HMAC signature.
 
 ## MVP event types
 
@@ -28,6 +28,9 @@ Both copies have been independently retrieved and validated against the PieceCID
 ```text
 MetaMask account
   -> switch to Filecoin Calibration
+  -> optionally upload a file to providers 4 and 2 with Synapse SDK
+  -> fund/approve FOC through MetaMask when required
+  -> commit the new PieceCID onchain under the connected payer
   -> query data sets where the wallet is the payer
   -> select one of that wallet's active PieceCIDs
   -> revalidate wallet ownership on the server
@@ -57,7 +60,9 @@ Start the local API and signed demo receiver:
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/`, connect MetaMask, switch to Calibration, and select a Piece owned by the connected wallet. Use **Switch wallet** to reopen MetaMask's account picker; account changes clear all prior wallet data. Wallets without FOC data show an empty state and never fall back to the bundled demo receipt.
+Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use **Upload to FOC** to send a file directly from the browser to providers `4` and `2`; MetaMask signs any required funding/approval and onchain commit actions. The resulting PieceCID is refreshed into the same wallet's monitor. The hackathon UI limits a selected file to 50 MB.
+
+You can also select any Piece already owned by the connected wallet. Use **Switch wallet** to reopen MetaMask's account picker; account changes clear all prior wallet data. Wallets without FOC data show an empty state and never fall back to the bundled demo receipt. File bytes are sent to the selected FOC provider, not to the Proofhook backend.
 
 The runtime uses public Calibration RPC reads and does not read `FILECOIN_PRIVATE_KEY`.
 

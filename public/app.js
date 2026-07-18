@@ -1,5 +1,10 @@
+import { Synapse, calibration } from '@filoz/synapse-sdk'
+import { custom, getAddress } from 'viem'
+
 const CALIBRATION_CHAIN_ID = '0x4cb2f'
 const CALIBRATION_CHAIN_ID_DECIMAL = 314159
+const UPLOAD_PROVIDER_IDS = [4n, 2n]
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 const state = {
   walletAddress: null,
@@ -11,6 +16,7 @@ const state = {
   deliveries: [],
   inbox: [],
   loadVersion: 0,
+  uploading: false,
 }
 
 const elements = {
@@ -34,6 +40,11 @@ const elements = {
   payloadView: document.querySelector('#payload-view'),
   signatureState: document.querySelector('#signature-state'),
   toast: document.querySelector('#toast'),
+  uploadFile: document.querySelector('#upload-file'),
+  uploadButton: document.querySelector('#upload-button'),
+  uploadStatus: document.querySelector('#upload-status'),
+  uploadProgress: document.querySelector('#upload-progress'),
+  uploadResult: document.querySelector('#upload-result'),
 }
 
 function escapeHtml(value) {
@@ -86,6 +97,21 @@ function isCalibration() {
   return Number(state.walletChainId) === CALIBRATION_CHAIN_ID_DECIMAL
 }
 
+function updateUploadAvailability() {
+  const file = elements.uploadFile.files?.[0]
+  elements.uploadButton.disabled =
+    state.uploading || !file || !state.walletAddress || !isCalibration()
+}
+
+function setUploadStatus(message, progress = null) {
+  elements.uploadStatus.textContent = message
+  if (progress === null) {
+    elements.uploadProgress.removeAttribute('value')
+  } else {
+    elements.uploadProgress.value = Math.max(0, Math.min(100, progress))
+  }
+}
+
 function clearWalletData(message = 'Connect MetaMask to discover Filecoin data sets.') {
   state.loadVersion += 1
   state.dataSets = []
@@ -112,6 +138,7 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.signatureState.className = 'signature-state'
   elements.runCheck.disabled = true
   elements.sendTest.disabled = !state.walletAddress || !isCalibration()
+  updateUploadAvailability()
 }
 
 function renderWalletButton() {
@@ -135,7 +162,7 @@ function renderWalletButton() {
   elements.networkStatus.classList.remove('network-warning')
 }
 
-function renderPieceSelection() {
+function renderPieceSelection(preferredPieceCid) {
   elements.pieceMeta.textContent = `${state.dataSets.length} data sets | ${state.pieces.length} pieces`
   if (state.pieces.length === 0) {
     elements.pieceSelect.disabled = true
@@ -150,7 +177,8 @@ function renderPieceSelection() {
   elements.pieceSelect.innerHTML = state.pieces.map((piece) =>
     `<option value="${escapeHtml(piece.pieceCid)}">${escapeHtml(shortCid(piece.pieceCid))} | ${piece.copies.length} ${piece.copies.length === 1 ? 'copy' : 'copies'}</option>`
   ).join('')
-  selectPiece(state.pieces[0].pieceCid)
+  const preferred = state.pieces.find((piece) => piece.pieceCid === preferredPieceCid)
+  selectPiece(preferred?.pieceCid ?? state.pieces[0].pieceCid)
 }
 
 function selectPiece(pieceCid) {
@@ -242,7 +270,7 @@ async function refreshLogs() {
   if (state.deliveries.length > 0) selectDelivery(0)
 }
 
-async function loadWalletStorage() {
+async function loadWalletStorage(preferredPieceCid) {
   if (!state.walletAddress || !isCalibration()) return
   const version = ++state.loadVersion
   const address = state.walletAddress
@@ -253,12 +281,104 @@ async function loadWalletStorage() {
     if (version !== state.loadVersion || address !== state.walletAddress) return
     state.dataSets = storage.dataSets
     state.pieces = storage.pieces
-    renderPieceSelection()
+    renderPieceSelection(preferredPieceCid)
     await refreshLogs()
   } catch (error) {
     if (version !== state.loadVersion) return
     clearWalletData(`Could not load this wallet: ${error.message}`)
     showToast(error.message, true)
+  }
+}
+
+async function uploadToFoc() {
+  const file = elements.uploadFile.files?.[0]
+  if (!file || !state.walletAddress || !isCalibration() || state.uploading) return
+  if (file.size === 0) {
+    showToast('Choose a non-empty file', true)
+    return
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    showToast('MVP uploads are limited to 50 MB', true)
+    return
+  }
+
+  const walletAddress = state.walletAddress
+  state.uploading = true
+  elements.uploadResult.hidden = true
+  elements.uploadResult.textContent = ''
+  updateUploadAvailability()
+
+  try {
+    setUploadStatus('Resolving providers 4 and 2...', 0)
+    const synapse = Synapse.create({
+      account: getAddress(walletAddress),
+      chain: calibration,
+      transport: custom(window.ethereum),
+      source: 'proofhook',
+      withCDN: false,
+    })
+    const contexts = await synapse.storage.createContexts({
+      copies: 2,
+      providerIds: UPLOAD_PROVIDER_IDS,
+      callbacks: {
+        onProviderSelected: (provider) => {
+          if (walletAddress === state.walletAddress) {
+            setUploadStatus(`Provider ${provider.id.toString()} selected...`, 0)
+          }
+        },
+      },
+    })
+
+    setUploadStatus('Checking FOC payment readiness...', 0)
+    const prepared = await synapse.storage.prepare({
+      context: contexts,
+      dataSize: BigInt(file.size),
+    })
+    if (prepared.transaction) {
+      setUploadStatus('Confirm funding and FOC approval in MetaMask...', 0)
+      await prepared.transaction.execute({
+        onHash: () => setUploadStatus('Funding transaction submitted...', 0),
+      })
+    }
+
+    setUploadStatus('Uploading to the primary provider...', 1)
+    const result = await synapse.storage.upload(file.stream(), {
+      contexts,
+      pieceMetadata: {
+        filename: file.name.slice(0, 160),
+        contentType: (file.type || 'application/octet-stream').slice(0, 100),
+      },
+      callbacks: {
+        onProgress: (bytesUploaded) => {
+          if (walletAddress !== state.walletAddress) return
+          setUploadStatus('Uploading to the primary provider...', Math.round((bytesUploaded / file.size) * 70))
+        },
+        onStored: () => setUploadStatus('Primary stored. Creating the second copy...', 75),
+        onCopyComplete: (providerId) => setUploadStatus(`Provider ${providerId.toString()} copy complete...`, 85),
+        onPiecesAdded: () => setUploadStatus('Confirming PieceCID onchain...', 92),
+        onPiecesConfirmed: () => setUploadStatus('Onchain confirmation received...', 98),
+      },
+    })
+
+    if (walletAddress !== state.walletAddress) {
+      throw new Error('Wallet changed during upload. Reconnect the original wallet to inspect its PieceCID.')
+    }
+    const uploadedPieceCid = result.pieceCid.toString()
+    elements.uploadResult.hidden = false
+    elements.uploadResult.textContent = `${shortCid(uploadedPieceCid)} · ${result.copies.length}/${result.requestedCopies} copies`
+    setUploadStatus(
+      result.complete ? 'Stored on FOC. Refreshing wallet data...' : 'Upload completed with partial redundancy.',
+      100
+    )
+    await loadWalletStorage(uploadedPieceCid)
+    showToast(result.complete ? 'File stored on two FOC providers' : 'File stored with partial redundancy', !result.complete)
+  } catch (error) {
+    const message = error?.shortMessage ?? error?.message ?? 'FOC upload failed'
+    setUploadStatus(message, 0)
+    showToast(message, true)
+  } finally {
+    state.uploading = false
+    updateUploadAvailability()
   }
 }
 
@@ -407,6 +527,14 @@ elements.switchWallet.addEventListener('click', chooseAnotherWallet)
 elements.pieceSelect.addEventListener('change', () => selectPiece(elements.pieceSelect.value))
 elements.runCheck.addEventListener('click', runWalletCheck)
 elements.sendTest.addEventListener('click', sendTestWebhook)
+elements.uploadFile.addEventListener('change', () => {
+  const file = elements.uploadFile.files?.[0]
+  elements.uploadResult.hidden = true
+  elements.uploadResult.textContent = ''
+  setUploadStatus(file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB ready` : 'Choose a file to begin.', 0)
+  updateUploadAvailability()
+})
+elements.uploadButton.addEventListener('click', uploadToFoc)
 elements.copyCid.addEventListener('click', async () => {
   if (!state.selectedPiece) return
   await navigator.clipboard.writeText(state.selectedPiece.pieceCid)

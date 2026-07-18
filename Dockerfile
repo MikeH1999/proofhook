@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY public ./public
 RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
@@ -13,7 +14,7 @@ ENV HOST=0.0.0.0
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
-COPY public ./public
+COPY --from=build /app/public ./public
 COPY fixtures ./fixtures
 RUN mkdir -p /app/data && chown -R node:node /app
 EXPOSE 3000

@@ -65,6 +65,24 @@
       </section>
 
       <div class="workspace">
+        <section class="upload-panel" aria-labelledby="upload-heading">
+          <div class="upload-copy">
+            <p class="eyebrow">WRITE TO FOC</p>
+            <h2 id="upload-heading">Upload a file</h2>
+            <p>Your file goes directly from this browser to two FOC providers. MetaMask signs the funding and onchain storage actions.</p>
+          </div>
+          <div class="upload-control">
+            <label class="file-picker" for="upload-file">
+              <span class="visually-hidden">Select a file to upload</span>
+              <input id="upload-file" type="file" />
+            </label>
+            <button class="button button-primary" id="upload-button" type="button" disabled>Upload to FOC</button>
+            <progress id="upload-progress" max="100" value="0"></progress>
+            <p class="upload-status" id="upload-status" aria-live="polite">Connect MetaMask and choose a file to begin.</p>
+            <code class="upload-result" id="upload-result" hidden></code>
+          </div>
+        </section>
+
         <section class="piece-picker" aria-live="polite">
           <div class="piece-picker-copy">
             <p class="eyebrow">WALLET SCOPE</p>
@@ -148,6 +166,6 @@
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/app.bundle.js"></script>
   </body>
 </html>
