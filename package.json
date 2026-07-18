@@ -13,6 +13,7 @@
     "test": "node --import tsx --test test/**/*.test.ts",
     "verify": "npm run typecheck && npm test && npm run build && npm audit --audit-level=high",
     "verify:live": "npm run verify && npm run check:piece",
+    "smoke:production": "tsx scripts/production-smoke.ts",
     "wallet:info": "tsx scripts/wallet-info.ts",
     "providers:info": "tsx scripts/providers-info.ts",
     "seed": "tsx scripts/seed-demo.ts",
