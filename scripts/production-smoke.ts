@@ -57,7 +57,7 @@ const targetPiece = storage.body.pieces?.find((piece: any) => piece.pieceCid ===
 assert(storage.status === 200, 'wallet storage endpoint responds')
 assert(scheduledMonitor.status === 200 && Array.isArray(scheduledMonitor.body.runs), 'wallet schedule groups are readable')
 assert(storage.body.address?.toLowerCase() === walletAddress.toLowerCase(), 'storage is scoped to the requested wallet')
-assert(storage.body.dataSets?.length === 5, 'wallet exposes five FOC data sets')
+assert(storage.body.dataSets?.length >= 5, 'wallet exposes the known FOC data sets plus any new uploads')
 assert(targetPiece?.copies?.length === 2, 'target PieceCID has two provider copies')
 assert(
   targetPiece.copies.map((copy: any) => String(copy.providerId)).sort().join(',') === '2,4',
