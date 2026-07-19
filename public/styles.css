@@ -60,7 +60,7 @@ h1, h2, p { margin: 0; }
 h1 { margin-top: 5px; font-size: 27px; line-height: 1.2; letter-spacing: 0; }
 h2 { margin-top: 4px; font-size: 18px; line-height: 1.25; letter-spacing: 0; }
 .eyebrow { color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: 0; }
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .button { min-height: 38px; padding: 0 15px; border-radius: 5px; border: 1px solid transparent; cursor: pointer; font-size: 14px; font-weight: 650; }
 .button:disabled { opacity: .5; cursor: not-allowed; }
 .button-primary { background: var(--blue); color: #fff; }
@@ -150,7 +150,7 @@ td code { font-size: 12px; }
   .metamask-button { max-width: 190px; padding: 0 9px; }
   .switch-wallet-button { padding: 0 9px; }
   .actions { width: 100%; }
-  .actions .button { flex: 1; }
+  .actions .button { flex: 1 1 150px; }
   .summary-inner { display: block; padding: 8px 0; }
   .summary-item, .summary-item + .summary-item { padding: 12px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .summary-item:last-child { border-bottom: 0; }

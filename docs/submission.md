@@ -17,7 +17,8 @@ Connect MetaMask and either upload a file through Synapse SDK or select existing
 ```text
 MetaMask
   -> Filecoin Calibration
-  -> browser-to-FOC upload on providers 4 and 2
+  -> browser-to-FOC upload targeting two independent providers
+  -> automatic replacement selection if a secondary pull fails
   -> MetaMask funding/approval + onchain PieceCID commit
   -> wallet-owned FOC data sets
   -> wallet-signed N-hour schedule (default 3h)
@@ -33,6 +34,7 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 
 - Synapse SDK-compatible PieceCID parsing and byte validation.
 - Synapse SDK multi-copy upload using store, provider-to-provider pull, and onchain commit.
+- Two-copy health policy plus wallet-authorized repair from an existing provider without re-uploading the file.
 - Filecoin Warm Storage data sets scoped by payer address.
 - PDP active pieces, challenge epochs, proving windows, and deadlines.
 - Service Provider Registry IDs and PDP service URLs.
@@ -61,7 +63,7 @@ Changing accounts through **Switch wallet** immediately clears the previous acco
 
 ## MVP scope
 
-Calibration only, manual checks, one built-in signed receiver, JSON delivery persistence, and a single-instance optional scheduler. Mainnet, hosted notification channels, and multi-instance scheduling are intentionally outside the hackathon MVP.
+Calibration only, one built-in signed receiver, JSON delivery persistence, and a single-instance scheduler. Uploads target two copies and low redundancy is detected automatically, but paid repair still requires MetaMask authorization. Mainnet, unattended session-key repair, hosted notification channels, and multi-instance scheduling are intentionally outside the hackathon MVP.
 
 ## Submission links
 

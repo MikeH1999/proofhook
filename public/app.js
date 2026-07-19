@@ -1,9 +1,9 @@
 import { Synapse, calibration } from '@filoz/synapse-sdk'
+import * as Piece from '@filoz/synapse-core/piece'
 import { custom, getAddress, stringToHex } from 'viem'
 
 const CALIBRATION_CHAIN_ID = '0x4cb2f'
 const CALIBRATION_CHAIN_ID_DECIMAL = 314159
-const UPLOAD_PROVIDER_IDS = [4n, 2n]
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 const state = {
@@ -17,6 +17,7 @@ const state = {
   monitorRuns: [],
   loadVersion: 0,
   uploading: false,
+  repairing: false,
 }
 
 const elements = {
@@ -29,6 +30,7 @@ const elements = {
   pieceMeta: document.querySelector('#piece-meta'),
   runCheck: document.querySelector('#run-check'),
   sendTest: document.querySelector('#send-test'),
+  repairCopy: document.querySelector('#repair-copy'),
   copyCid: document.querySelector('#copy-cid'),
   pieceCid: document.querySelector('#piece-cid'),
   overallHealth: document.querySelector('#overall-health'),
@@ -106,7 +108,21 @@ function isCalibration() {
 function updateUploadAvailability() {
   const file = elements.uploadFile.files?.[0]
   elements.uploadButton.disabled =
-    state.uploading || !file || !state.walletAddress || !isCalibration()
+    state.uploading || state.repairing || !file || !state.walletAddress || !isCalibration()
+}
+
+function healthyCopyCount() {
+  if (!state.health) return state.selectedPiece?.copies.length ?? 0
+  return state.health.copies.filter((copy) =>
+    copy.retrievalVerified && copy.proofOverdue !== true
+  ).length
+}
+
+function updateRepairAvailability() {
+  const needsRepair = Boolean(state.selectedPiece && healthyCopyCount() < 2)
+  elements.repairCopy.hidden = !needsRepair
+  elements.repairCopy.disabled =
+    !needsRepair || state.repairing || state.uploading || !state.walletAddress || !isCalibration()
 }
 
 function setUploadStatus(message, progress = null) {
@@ -155,6 +171,7 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.monitorNextRun.textContent = 'Not scheduled'
   elements.runCheck.disabled = true
   elements.sendTest.disabled = !state.walletAddress || !isCalibration()
+  updateRepairAvailability()
   updateUploadAvailability()
   updateMonitorAvailability()
 }
@@ -208,6 +225,7 @@ function selectPiece(pieceCid) {
   elements.lastChecked.textContent = 'Never'
   elements.copyCount.textContent = `${state.selectedPiece?.copies.length ?? 0} copies`
   elements.runCheck.disabled = !state.selectedPiece || !isCalibration()
+  updateRepairAvailability()
   if (!state.selectedPiece) return
   elements.providerRows.innerHTML = state.selectedPiece.copies.map((copy) => `
     <tr>
@@ -240,6 +258,7 @@ function renderHealth() {
         <td>${escapeHtml(formatDate(copy.nextProofDueAt))}</td>
       </tr>`
   }).join('')
+  updateRepairAvailability()
 }
 
 function renderMonitor() {
@@ -388,7 +407,7 @@ async function uploadToFoc() {
   updateUploadAvailability()
 
   try {
-    setUploadStatus('Resolving providers 4 and 2...', 0)
+    setUploadStatus('Resolving two independent providers...', 0)
     const synapse = Synapse.create({
       account: getAddress(walletAddress),
       chain: calibration,
@@ -398,7 +417,6 @@ async function uploadToFoc() {
     })
     const contexts = await synapse.storage.createContexts({
       copies: 2,
-      providerIds: UPLOAD_PROVIDER_IDS,
       callbacks: {
         onProviderSelected: (provider) => {
           if (walletAddress === state.walletAddress) {
@@ -422,7 +440,7 @@ async function uploadToFoc() {
 
     setUploadStatus('Uploading to the primary provider...', 1)
     const result = await synapse.storage.upload(file.stream(), {
-      contexts,
+      copies: 2,
       pieceMetadata: {
         filename: file.name.slice(0, 160),
         contentType: (file.type || 'application/octet-stream').slice(0, 100),
@@ -444,13 +462,13 @@ async function uploadToFoc() {
     }
     const uploadedPieceCid = result.pieceCid.toString()
     elements.uploadResult.hidden = false
-    elements.uploadResult.textContent = `${shortCid(uploadedPieceCid)} · ${result.copies.length}/${result.requestedCopies} copies`
+    elements.uploadResult.textContent = `${shortCid(uploadedPieceCid)} | ${result.copies.length}/${result.requestedCopies} copies`
     setUploadStatus(
-      result.complete ? 'Stored on FOC. Refreshing wallet data...' : 'Upload completed with partial redundancy.',
+      result.complete ? 'Stored 2/2 copies. Refreshing wallet data...' : `Stored ${result.copies.length}/2 copies. Repair required.`,
       100
     )
     await loadWalletStorage(uploadedPieceCid)
-    showToast(result.complete ? 'File stored on two FOC providers' : 'File stored with partial redundancy', !result.complete)
+    showToast(result.complete ? 'File stored on two FOC providers' : `Stored ${result.copies.length}/2 copies. Repair required.`, !result.complete)
   } catch (error) {
     const message = error?.shortMessage ?? error?.message ?? 'FOC upload failed'
     setUploadStatus(message, 0)
@@ -458,6 +476,115 @@ async function uploadToFoc() {
   } finally {
     state.uploading = false
     updateUploadAvailability()
+    updateRepairAvailability()
+  }
+}
+
+async function repairToTwoCopies() {
+  if (
+    !state.walletAddress || !state.selectedPiece || !isCalibration() ||
+    state.repairing || healthyCopyCount() >= 2
+  ) return
+
+  const walletAddress = state.walletAddress
+  const pieceCidString = state.selectedPiece.pieceCid
+  const selectedPiece = state.selectedPiece
+  const original = elements.repairCopy.textContent
+  state.repairing = true
+  elements.repairCopy.textContent = 'Preparing repair...'
+  elements.runCheck.disabled = true
+  updateUploadAvailability()
+  updateRepairAvailability()
+
+  try {
+    const piece = Piece.from(pieceCidString)
+    const healthySource = state.health?.copies.find((copy) =>
+      copy.retrievalVerified && copy.proofOverdue !== true
+    ) ?? state.health?.copies.find((copy) => copy.retrievalVerified)
+    const sourceCopy = selectedPiece.copies.find((copy) =>
+      copy.dataSetId === healthySource?.dataSetId
+    ) ?? selectedPiece.copies[0]
+
+    if (!sourceCopy) throw new Error('No existing provider copy is available as the repair source.')
+
+    const synapse = Synapse.create({
+      account: getAddress(walletAddress),
+      chain: calibration,
+      transport: custom(window.ethereum),
+      source: 'proofhook',
+      withCDN: false,
+    })
+    const sourceContext = await synapse.storage.createContext({
+      dataSetId: BigInt(sourceCopy.dataSetId),
+    })
+    const excludedProviderIds = selectedPiece.copies.map((copy) => BigInt(copy.providerId))
+    let targetProviderId = null
+    const targetContext = await synapse.storage.createContext({
+      excludeProviderIds: excludedProviderIds,
+      callbacks: {
+        onProviderSelected: (provider) => {
+          targetProviderId = provider.id
+          if (walletAddress === state.walletAddress) {
+            elements.repairCopy.textContent = `Preparing provider ${provider.id.toString()}...`
+          }
+        },
+      },
+    })
+
+    if (walletAddress !== state.walletAddress || pieceCidString !== state.selectedPiece?.pieceCid) {
+      throw new Error('Wallet or PieceCID changed during repair. Return to the original selection and retry.')
+    }
+
+    const prepared = await synapse.storage.prepare({
+      context: targetContext,
+      dataSize: BigInt(piece.size),
+    })
+    if (prepared.transaction) {
+      elements.repairCopy.textContent = 'Confirm funding...'
+      await prepared.transaction.execute({
+        onHash: () => { elements.repairCopy.textContent = 'Funding submitted...' },
+      })
+    }
+
+    const pieceInput = {
+      pieceCid: piece,
+      pieceMetadata: { repairedBy: 'proofhook' },
+    }
+    elements.repairCopy.textContent = 'Sign repair...'
+    const extraData = await targetContext.presignForCommit([pieceInput])
+    elements.repairCopy.textContent = `Copying to provider ${targetProviderId?.toString() ?? 'new'}...`
+    const pullResult = await targetContext.pull({
+      pieces: [piece],
+      from: (cid) => sourceContext.getPieceUrl(cid),
+      extraData,
+    })
+    if (pullResult.status !== 'complete') {
+      throw new Error('The new provider could not pull the PieceCID from the existing copy.')
+    }
+
+    elements.repairCopy.textContent = 'Committing onchain...'
+    const commitResult = await targetContext.commit({
+      pieces: [pieceInput],
+      extraData,
+      onSubmitted: () => { elements.repairCopy.textContent = 'Confirming onchain...' },
+    })
+
+    if (walletAddress !== state.walletAddress) {
+      throw new Error('Wallet changed during repair. Reconnect the original wallet to inspect the new copy.')
+    }
+
+    await loadWalletStorage(pieceCidString)
+    await runWalletCheck()
+    showToast(`Second copy committed on provider ${targetProviderId?.toString() ?? 'new'} (data set ${commitResult.dataSetId.toString()})`)
+  } catch (error) {
+    const message = error?.shortMessage ?? error?.message ?? 'Could not repair this PieceCID'
+    showToast(message, true)
+  } finally {
+    state.repairing = false
+    elements.repairCopy.textContent = original
+    elements.runCheck.disabled = !state.selectedPiece || !isCalibration()
+    updateUploadAvailability()
+    updateRepairAvailability()
   }
 }
 
@@ -605,12 +732,13 @@ elements.switchWallet.addEventListener('click', chooseAnotherWallet)
 elements.pieceSelect.addEventListener('change', () => selectPiece(elements.pieceSelect.value))
 elements.runCheck.addEventListener('click', runWalletCheck)
 elements.sendTest.addEventListener('click', sendTestWebhook)
+elements.repairCopy.addEventListener('click', repairToTwoCopies)
 elements.uploadFile.addEventListener('change', () => {
   const file = elements.uploadFile.files?.[0]
   elements.uploadFileName.textContent = file ? file.name : 'No file selected'
   elements.uploadResult.hidden = true
   elements.uploadResult.textContent = ''
-  setUploadStatus(file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB ready` : 'Choose a file to begin.', 0)
+  setUploadStatus(file ? `${file.name} | ${(file.size / 1024).toFixed(1)} KB ready` : 'Choose a file to begin.', 0)
   updateUploadAvailability()
 })
 elements.uploadButton.addEventListener('click', uploadToFoc)

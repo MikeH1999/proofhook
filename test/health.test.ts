@@ -27,6 +27,10 @@ describe('calculateHealthState', () => {
     assert.equal(calculateHealthState([copy(), copy({ providerId: '2' })]), 'healthy')
   })
 
+  it('is degraded with only one healthy copy', () => {
+    assert.equal(calculateHealthState([copy()]), 'degraded')
+  })
+
   it('is degraded when only one copy retrieves', () => {
     assert.equal(
       calculateHealthState([

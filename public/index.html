@@ -39,6 +39,7 @@
           </div>
           <div class="actions">
             <button class="button button-secondary" id="send-test" type="button" disabled>Send test</button>
+            <button class="button button-secondary" id="repair-copy" type="button" hidden disabled>Repair to 2 copies</button>
             <button class="button button-primary" id="run-check" type="button" disabled>Run Filecoin check</button>
           </div>
         </div>
@@ -69,7 +70,7 @@
           <div class="upload-copy">
             <p class="eyebrow">WRITE TO FOC</p>
             <h2 id="upload-heading">Upload a file</h2>
-            <p>Your file goes directly from this browser to two FOC providers. MetaMask signs the funding and onchain storage actions.</p>
+            <p>Your file goes directly from this browser to two FOC providers. Synapse retries a replacement provider if the second copy fails; any 1/2 result is flagged for repair. MetaMask signs the funding and onchain storage actions.</p>
           </div>
           <div class="upload-control">
             <label class="file-picker" for="upload-file">

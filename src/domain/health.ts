@@ -9,6 +9,7 @@ export function calculateHealthState(copies: CopyHealth[]): HealthState {
     knownProofs.length === copies.length && knownProofs.every((copy) => copy.proofOverdue)
 
   if (verifiedCount === 0) return copies.every((copy) => copy.error !== null) ? 'unhealthy' : 'unknown'
+  if (copies.length < 2) return 'degraded'
   if (verifiedCount < copies.length || allKnownProofsOverdue) return 'degraded'
   return 'healthy'
 }
