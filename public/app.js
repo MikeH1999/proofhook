@@ -32,6 +32,9 @@ const elements = {
   runCheck: document.querySelector('#run-check'),
   sendTest: document.querySelector('#send-test'),
   repairCopy: document.querySelector('#repair-copy'),
+  repairCopyLabel: document.querySelector('#repair-copy-label'),
+  repairSpinner: document.querySelector('#repair-spinner'),
+  repairStatus: document.querySelector('#repair-status'),
   copyCid: document.querySelector('#copy-cid'),
   pieceCid: document.querySelector('#piece-cid'),
   overallHealth: document.querySelector('#overall-health'),
@@ -125,6 +128,17 @@ function updateRepairAvailability() {
   elements.repairCopy.hidden = !needsRepair
   elements.repairCopy.disabled =
     !needsRepair || state.repairing || state.uploading || !state.walletAddress || !isCalibration()
+}
+
+function setRepairBusy(busy) {
+  elements.repairCopy.setAttribute('aria-busy', String(busy))
+  elements.repairCopyLabel.textContent = busy ? 'Repairing...' : 'Repair to 2 copies'
+  elements.repairSpinner.hidden = !busy
+}
+
+function setRepairProgress(message = '') {
+  elements.repairStatus.textContent = message
+  elements.repairStatus.hidden = message.length === 0
 }
 
 function describePieceHealth(health) {
@@ -588,7 +602,7 @@ async function resolveRepairTarget(synapse, excludedProviderIds, walletAddress) 
   const candidates = await findReachableApprovedProviders(
     synapse,
     excludedProviderIds,
-    (message) => { elements.repairCopy.textContent = message }
+    setRepairProgress
   )
 
   if (candidates.length === 0) {
@@ -599,7 +613,7 @@ async function resolveRepairTarget(synapse, excludedProviderIds, walletAddress) 
   for (const provider of candidates) {
     try {
       if (walletAddress === state.walletAddress) {
-        elements.repairCopy.textContent = `Preparing provider ${provider.id.toString()}...`
+        setRepairProgress(`Preparing provider ${provider.id.toString()}...`)
       }
       const context = await synapse.storage.createContext({ providerId: provider.id })
       return { context, providerId: provider.id }
@@ -620,9 +634,9 @@ async function repairToTwoCopies() {
   const walletAddress = state.walletAddress
   const pieceCidString = state.selectedPiece.pieceCid
   const selectedPiece = state.selectedPiece
-  const original = elements.repairCopy.textContent
   state.repairing = true
-  elements.repairCopy.textContent = 'Preparing repair...'
+  setRepairBusy(true)
+  setRepairProgress('Preparing repair...')
   elements.runCheck.disabled = true
   updateUploadAvailability()
   updateRepairAvailability()
@@ -664,9 +678,9 @@ async function repairToTwoCopies() {
       dataSize: BigInt(piece.size),
     })
     if (prepared.transaction) {
-      elements.repairCopy.textContent = 'Confirm funding...'
+      setRepairProgress('Confirm funding and FOC approval in MetaMask...')
       await prepared.transaction.execute({
-        onHash: () => { elements.repairCopy.textContent = 'Funding submitted...' },
+        onHash: () => { setRepairProgress('Funding submitted. Waiting for confirmation...') },
       })
     }
 
@@ -674,9 +688,9 @@ async function repairToTwoCopies() {
       pieceCid: piece,
       pieceMetadata: { repairedBy: 'proofhook' },
     }
-    elements.repairCopy.textContent = 'Sign repair...'
+    setRepairProgress('Sign the repair authorization in MetaMask...')
     const extraData = await targetContext.presignForCommit([pieceInput])
-    elements.repairCopy.textContent = `Copying to provider ${targetProviderId?.toString() ?? 'new'}...`
+    setRepairProgress(`Provider ${targetProviderId.toString()} is pulling the existing PieceCID...`)
     const pullResult = await targetContext.pull({
       pieces: [piece],
       from: (cid) => sourceContext.getPieceUrl(cid),
@@ -686,11 +700,11 @@ async function repairToTwoCopies() {
       throw new Error('The new provider could not pull the PieceCID from the existing copy.')
     }
 
-    elements.repairCopy.textContent = 'Committing onchain...'
+    setRepairProgress('Commit the second copy onchain...')
     const commitResult = await targetContext.commit({
       pieces: [pieceInput],
       extraData,
-      onSubmitted: () => { elements.repairCopy.textContent = 'Confirming onchain...' },
+      onSubmitted: () => { setRepairProgress('Transaction submitted. Confirming the second copy onchain...') },
     })
 
     if (walletAddress !== state.walletAddress) {
@@ -705,7 +719,8 @@ async function repairToTwoCopies() {
     showToast(message, true)
   } finally {
     state.repairing = false
-    elements.repairCopy.textContent = original
+    setRepairBusy(false)
+    setRepairProgress()
     elements.runCheck.disabled = !state.selectedPiece || !isCalibration()
     updateUploadAvailability()
     updateRepairAvailability()

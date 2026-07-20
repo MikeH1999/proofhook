@@ -105,6 +105,7 @@ h2 { margin-top: 4px; font-size: 18px; line-height: 1.25; letter-spacing: 0; }
 .piece-picker { min-height: 112px; margin-bottom: 32px; padding: 20px 0; display: grid; grid-template-columns: minmax(260px, .85fr) minmax(360px, 1.15fr); align-items: center; gap: 48px; border-bottom: 1px solid var(--line); }
 .piece-picker-copy { min-width: 0; }
 .wallet-scope { margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.repair-description { max-width: 500px; margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .piece-control { min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; align-items: center; }
 .piece-control label { color: var(--muted); font-size: 12px; font-weight: 700; }
 .piece-select-row { grid-column: 1 / -1; min-width: 0; display: flex; align-items: center; gap: 10px; }
@@ -112,6 +113,13 @@ h2 { margin-top: 4px; font-size: 18px; line-height: 1.25; letter-spacing: 0; }
 .piece-control select:focus { outline: 2px solid rgba(9,105,218,.24); border-color: var(--blue); }
 .piece-control select:disabled { background: #eef1f4; color: var(--muted); cursor: not-allowed; }
 .piece-meta { grid-row: 1; grid-column: 2; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.repair-button { flex: 0 0 174px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+.repair-button[aria-busy="true"] { opacity: .78; cursor: wait; }
+.repair-spinner { width: 14px; height: 14px; flex: 0 0 auto; border: 2px solid #b9c1ca; border-top-color: var(--blue); border-radius: 50%; animation: repair-spin .8s linear infinite; }
+.repair-spinner[hidden] { display: none; }
+.repair-status { grid-column: 1 / -1; color: var(--blue); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.repair-status[hidden] { display: none; }
+@keyframes repair-spin { to { transform: rotate(360deg); } }
 .monitor-panel { margin: -8px 0 34px; padding: 22px; display: grid; grid-template-columns: minmax(260px, .85fr) minmax(420px, 1.15fr); gap: 48px; align-items: center; border: 1px solid #cbd4de; background: var(--surface); }
 .monitor-description { max-width: 480px; margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .monitor-control { min-width: 0; display: grid; grid-template-columns: auto minmax(110px, .7fr) auto auto; gap: 9px 10px; align-items: center; }

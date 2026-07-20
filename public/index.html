@@ -99,6 +99,7 @@
             <p class="eyebrow">WALLET SCOPE</p>
             <h2>Your FOC storage</h2>
             <p class="wallet-scope" id="wallet-scope">Connect MetaMask to discover Filecoin data sets.</p>
+            <p class="repair-description">PieceCIDs below the 2-copy health target show a Repair button. A new approved provider pulls the existing Piece directly, so no file re-upload is needed. MetaMask authorizes funding and the onchain commit.</p>
           </div>
           <div class="piece-control">
             <label for="piece-select">Piece to monitor</label>
@@ -107,8 +108,12 @@
               <select id="piece-select" disabled>
                 <option value="">Connect wallet first</option>
               </select>
-              <button class="button button-secondary" id="repair-copy" type="button" hidden disabled>Repair to 2 copies</button>
+              <button class="button button-secondary repair-button" id="repair-copy" type="button" aria-busy="false" hidden disabled>
+                <span class="repair-spinner" id="repair-spinner" aria-hidden="true" hidden></span>
+                <span id="repair-copy-label">Repair to 2 copies</span>
+              </button>
             </div>
+            <p class="repair-status" id="repair-status" aria-live="polite" hidden></p>
           </div>
         </section>
 

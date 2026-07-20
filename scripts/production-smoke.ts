@@ -50,6 +50,7 @@ assert(
     appPage.text.includes('Maximum file size: 500 MB') &&
     appPage.text.includes('Health status definitions') &&
     appPage.text.includes('Repair to 2 copies') &&
+    appPage.text.includes('no file re-upload is needed') &&
     appPage.text.includes('wallet is offline') &&
     appPage.text.includes('<th>Reason</th>') &&
     appPage.text.includes('Check every copy automatically') &&
@@ -60,6 +61,7 @@ assert(
   appBundle.status === 200 &&
     appBundle.text.length > 100_000 &&
     appBundle.text.includes('Checking approved providers (up to 10 seconds)') &&
+    appBundle.text.includes('Funding submitted. Waiting for confirmation') &&
     appBundle.text.includes('below the 2-copy target'),
   'Synapse provider selection and health reasons are deployed'
 )
