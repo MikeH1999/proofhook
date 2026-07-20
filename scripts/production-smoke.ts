@@ -64,6 +64,7 @@ assert(
 assert(
   appBundle.status === 200 &&
     appBundle.text.length > 100_000 &&
+    appBundle.text.includes('en-US') &&
     appBundle.text.includes('Checking approved providers (up to 10 seconds)') &&
     appBundle.text.includes('Funding submitted. Waiting for confirmation') &&
     appBundle.text.includes('below the 2-copy target'),

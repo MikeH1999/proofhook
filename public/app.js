@@ -94,8 +94,8 @@ function formatCopyCount(count) {
 
 function formatDate(value) {
   if (!value) return 'Pending first proof'
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   }).format(new Date(value))
 }
 
