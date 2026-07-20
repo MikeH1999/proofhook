@@ -44,6 +44,8 @@ const appPage = await request('/')
 const appBundle = await request('/app.bundle.js')
 assert(
   appPage.status === 200 &&
+    appPage.text.includes('Filecoin storage health') &&
+    appPage.text.includes('Check health') &&
     appPage.text.includes('Upload to FOC') &&
     appPage.text.includes('Choose file') &&
     appPage.text.includes('No file selected') &&
@@ -52,6 +54,8 @@ assert(
     appPage.text.includes('Repair to 2 copies') &&
     appPage.text.includes('no file re-upload is needed') &&
     appPage.text.includes('wallet is offline') &&
+    appPage.text.includes('Built-in HMAC-verified receiver') &&
+    appPage.text.includes('Test webhook') &&
     appPage.text.includes('<th>Reason</th>') &&
     appPage.text.includes('Check every copy automatically') &&
     appPage.text.includes('Health run groups'),

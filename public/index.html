@@ -34,12 +34,37 @@
       <section class="command-band">
         <div class="command-inner">
           <div>
-            <p class="eyebrow">FILECOIN HEALTH</p>
-            <h1>Webhook monitor</h1>
+            <p class="eyebrow">PROOFHOOK</p>
+            <h1>Filecoin storage health</h1>
           </div>
-          <div class="actions">
-            <button class="button button-secondary" id="send-test" type="button" disabled>Send test</button>
-            <button class="button button-primary" id="run-check" type="button" disabled>Run Filecoin check</button>
+        </div>
+      </section>
+
+      <section class="storage-band" aria-labelledby="storage-heading">
+        <div class="storage-inner piece-picker" aria-live="polite">
+          <div class="piece-picker-copy">
+            <p class="eyebrow">WALLET SCOPE</p>
+            <h2 id="storage-heading">Your FOC storage</h2>
+            <p class="wallet-scope" id="wallet-scope">Connect MetaMask to discover Filecoin data sets.</p>
+            <p class="repair-description">PieceCIDs below the 2-copy health target show a Repair button. A new approved provider pulls the existing Piece directly, so no file re-upload is needed. MetaMask authorizes funding and the onchain commit.</p>
+          </div>
+          <div class="piece-control">
+            <label for="piece-select">Piece to monitor</label>
+            <span class="piece-meta" id="piece-meta">0 data sets | 0 pieces</span>
+            <div class="piece-select-row">
+              <select id="piece-select" disabled>
+                <option value="">Connect wallet first</option>
+              </select>
+              <button class="button button-secondary repair-button" id="repair-copy" type="button" aria-busy="false" hidden disabled>
+                <span class="button-spinner" id="repair-spinner" aria-hidden="true" hidden></span>
+                <span id="repair-copy-label">Repair to 2 copies</span>
+              </button>
+              <button class="button button-primary check-button" id="run-check" type="button" aria-busy="false" disabled>
+                <span class="button-spinner" id="check-spinner" aria-hidden="true" hidden></span>
+                <span id="run-check-label">Check health</span>
+              </button>
+            </div>
+            <p class="repair-status" id="repair-status" aria-live="polite" hidden></p>
           </div>
         </div>
       </section>
@@ -55,7 +80,7 @@
             <span class="summary-label">PieceCID</span>
             <div class="inline-value">
               <code id="piece-cid">Connect wallet</code>
-              <button class="text-button" id="copy-cid" type="button">Copy</button>
+              <button class="text-button" id="copy-cid" type="button" disabled>Copy</button>
             </div>
           </div>
           <div class="summary-item">
@@ -75,6 +100,33 @@
       </section>
 
       <div class="workspace">
+        <section class="section-block provider-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">SELECTED PIECE</p>
+              <h2>Provider copies</h2>
+            </div>
+            <span class="section-count" id="copy-count">0 copies</span>
+          </div>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Data set</th>
+                  <th>PDP</th>
+                  <th>Retrieval</th>
+                  <th>Latency</th>
+                  <th>Next proof due</th>
+                </tr>
+              </thead>
+              <tbody id="provider-rows">
+                <tr><td colspan="6" class="empty-cell">Select a PieceCID and run a health check.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="upload-panel" aria-labelledby="upload-heading">
           <div class="upload-copy">
             <p class="eyebrow">WRITE TO FOC</p>
@@ -94,34 +146,12 @@
           </div>
         </section>
 
-        <section class="piece-picker" aria-live="polite">
-          <div class="piece-picker-copy">
-            <p class="eyebrow">WALLET SCOPE</p>
-            <h2>Your FOC storage</h2>
-            <p class="wallet-scope" id="wallet-scope">Connect MetaMask to discover Filecoin data sets.</p>
-            <p class="repair-description">PieceCIDs below the 2-copy health target show a Repair button. A new approved provider pulls the existing Piece directly, so no file re-upload is needed. MetaMask authorizes funding and the onchain commit.</p>
-          </div>
-          <div class="piece-control">
-            <label for="piece-select">Piece to monitor</label>
-            <span class="piece-meta" id="piece-meta">0 data sets | 0 pieces</span>
-            <div class="piece-select-row">
-              <select id="piece-select" disabled>
-                <option value="">Connect wallet first</option>
-              </select>
-              <button class="button button-secondary repair-button" id="repair-copy" type="button" aria-busy="false" hidden disabled>
-                <span class="repair-spinner" id="repair-spinner" aria-hidden="true" hidden></span>
-                <span id="repair-copy-label">Repair to 2 copies</span>
-              </button>
-            </div>
-            <p class="repair-status" id="repair-status" aria-live="polite" hidden></p>
-          </div>
-        </section>
-
         <section class="monitor-panel" aria-labelledby="monitor-heading">
           <div>
             <p class="eyebrow">AUTOMATION</p>
             <h2 id="monitor-heading">Check every copy automatically</h2>
             <p class="monitor-description">Proofhook checks every PieceCID and provider copy, then sends one signed webhook per PieceCID. Once enabled, Railway keeps running the schedule even when this browser is closed and the wallet is offline.</p>
+            <p class="monitor-target"><strong>Webhook target</strong> Built-in HMAC-verified receiver</p>
           </div>
           <div class="monitor-control">
             <label for="monitor-interval">Interval</label>
@@ -129,37 +159,16 @@
               <input id="monitor-interval" type="number" min="1" max="168" step="1" value="3" disabled />
               <span>hours</span>
             </div>
-            <button class="button button-primary" id="monitor-save" type="button" disabled>Enable &amp; run now</button>
-            <button class="button button-secondary" id="monitor-pause" type="button" hidden disabled>Pause</button>
+            <div class="monitor-actions">
+              <button class="button button-primary" id="monitor-save" type="button" disabled>Enable monitoring &amp; run now</button>
+              <button class="button button-secondary" id="monitor-pause" type="button" hidden disabled>Pause monitoring</button>
+              <button class="button button-secondary test-button" id="send-test" type="button" aria-busy="false" disabled>
+                <span class="button-spinner" id="test-spinner" aria-hidden="true" hidden></span>
+                <span id="send-test-label">Test webhook</span>
+              </button>
+            </div>
             <p class="monitor-status" id="monitor-status">Connect MetaMask to configure automatic checks.</p>
             <p class="monitor-next">Next run: <strong id="monitor-next-run">Not scheduled</strong></p>
-          </div>
-        </section>
-
-        <section class="section-block">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">LIVE STORAGE</p>
-              <h2>Provider copies</h2>
-            </div>
-            <span class="section-count" id="copy-count">0 copies</span>
-          </div>
-          <div class="table-shell">
-            <table>
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Data set</th>
-                  <th>PDP</th>
-                  <th>Retrieval</th>
-                  <th>Latency</th>
-                  <th>Next proof due</th>
-                </tr>
-              </thead>
-              <tbody id="provider-rows">
-                <tr><td colspan="6" class="empty-cell">Run a Filecoin check to load provider health.</td></tr>
-              </tbody>
-            </table>
           </div>
         </section>
 

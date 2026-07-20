@@ -19,6 +19,8 @@ const state = {
   loadVersion: 0,
   uploading: false,
   repairing: false,
+  checking: false,
+  testingWebhook: false,
 }
 
 const elements = {
@@ -30,7 +32,11 @@ const elements = {
   pieceSelect: document.querySelector('#piece-select'),
   pieceMeta: document.querySelector('#piece-meta'),
   runCheck: document.querySelector('#run-check'),
+  runCheckLabel: document.querySelector('#run-check-label'),
+  checkSpinner: document.querySelector('#check-spinner'),
   sendTest: document.querySelector('#send-test'),
+  sendTestLabel: document.querySelector('#send-test-label'),
+  testSpinner: document.querySelector('#test-spinner'),
   repairCopy: document.querySelector('#repair-copy'),
   repairCopyLabel: document.querySelector('#repair-copy-label'),
   repairSpinner: document.querySelector('#repair-spinner'),
@@ -75,6 +81,15 @@ function shortAddress(address) {
 
 function shortCid(cid) {
   return cid.length > 28 ? `${cid.slice(0, 18)}...${cid.slice(-8)}` : cid
+}
+
+function formatFileSize(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / 1024).toFixed(1)} KB`
+}
+
+function formatCopyCount(count) {
+  return `${count} ${count === 1 ? 'copy' : 'copies'}`
 }
 
 function formatDate(value) {
@@ -127,7 +142,13 @@ function updateRepairAvailability() {
   const needsRepair = Boolean(state.selectedPiece && healthyCopyCount() < 2)
   elements.repairCopy.hidden = !needsRepair
   elements.repairCopy.disabled =
-    !needsRepair || state.repairing || state.uploading || !state.walletAddress || !isCalibration()
+    !needsRepair || state.repairing || state.uploading || state.checking || !state.walletAddress || !isCalibration()
+}
+
+function setActionBusy(button, label, spinner, busy, idleText, busyText) {
+  button.setAttribute('aria-busy', String(busy))
+  label.textContent = busy ? busyText : idleText
+  spinner.hidden = !busy
 }
 
 function setRepairBusy(busy) {
@@ -202,6 +223,7 @@ function updateMonitorAvailability() {
   elements.monitorSave.disabled = !ready
   elements.monitorPause.disabled = !ready
   elements.monitorPause.hidden = !state.monitor?.enabled
+  elements.sendTest.disabled = !ready || state.testingWebhook
 }
 
 function clearWalletData(message = 'Connect MetaMask to discover Filecoin data sets.') {
@@ -218,11 +240,12 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.pieceSelect.innerHTML = '<option value="">No wallet data loaded</option>'
   elements.pieceMeta.textContent = '0 data sets | 0 pieces'
   elements.pieceCid.textContent = state.walletAddress ? 'No piece selected' : 'Connect wallet'
+  elements.copyCid.disabled = true
   elements.overallHealth.textContent = 'Not checked'
   elements.overallHealth.className = 'status-badge status-unknown'
   elements.healthReason.textContent = 'Run a check to explain this PieceCID\'s status.'
   elements.lastChecked.textContent = 'Never'
-  elements.copyCount.textContent = '0 copies'
+  elements.copyCount.textContent = formatCopyCount(0)
   elements.providerRows.innerHTML = `<tr><td colspan="6" class="empty-cell">${escapeHtml(message)}</td></tr>`
   elements.deliveryCount.textContent = '0 runs'
   elements.deliveryRows.innerHTML = '<tr><td colspan="8" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
@@ -233,7 +256,6 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.monitorStatus.textContent = state.walletAddress ? 'No schedule configured.' : 'Connect MetaMask to configure automatic checks.'
   elements.monitorNextRun.textContent = 'Not scheduled'
   elements.runCheck.disabled = true
-  elements.sendTest.disabled = !state.walletAddress || !isCalibration()
   updateRepairAvailability()
   updateUploadAvailability()
   updateMonitorAvailability()
@@ -283,14 +305,16 @@ function selectPiece(pieceCid) {
   state.selectedPiece = state.pieces.find((piece) => piece.pieceCid === pieceCid) ?? null
   state.health = null
   elements.pieceCid.textContent = state.selectedPiece?.pieceCid ?? 'No piece selected'
+  elements.copyCid.disabled = !state.selectedPiece
   elements.overallHealth.textContent = 'Not checked'
   elements.overallHealth.className = 'status-badge status-unknown'
   elements.healthReason.textContent = state.selectedPiece
     ? 'Run a check to explain this PieceCID\'s status.'
     : 'Select a PieceCID to inspect its health.'
   elements.lastChecked.textContent = 'Never'
-  elements.copyCount.textContent = `${state.selectedPiece?.copies.length ?? 0} copies`
-  elements.runCheck.disabled = !state.selectedPiece || !isCalibration()
+  elements.copyCount.textContent = formatCopyCount(state.selectedPiece?.copies.length ?? 0)
+  elements.runCheck.disabled =
+    !state.selectedPiece || state.checking || state.repairing || !isCalibration()
   updateRepairAvailability()
   if (!state.selectedPiece) return
   elements.providerRows.innerHTML = state.selectedPiece.copies.map((copy) => `
@@ -312,14 +336,19 @@ function renderHealth() {
   elements.overallHealth.className = `status-badge ${statusClass(health.state)}`
   elements.healthReason.textContent = describePieceHealth(health)
   elements.lastChecked.textContent = formatDate(health.checkedAt)
-  elements.copyCount.textContent = `${health.copies.length} copies`
+  elements.copyCount.textContent = formatCopyCount(health.copies.length)
   elements.providerRows.innerHTML = health.copies.map((copy) => {
     const source = state.selectedPiece?.copies.find((item) => item.dataSetId === copy.dataSetId)
+    const proofStatus = copy.proofOverdue === null
+      ? { className: 'status-pending', label: 'Pending' }
+      : copy.proofOverdue
+        ? { className: 'status-failed', label: 'Overdue' }
+        : { className: 'status-success', label: 'Current' }
     return `
       <tr>
         <td><div class="provider-cell"><span>${escapeHtml(source?.providerName ?? `Provider ${copy.providerId}`)}</span><span class="provider-role">#${escapeHtml(copy.providerId)}</span></div></td>
         <td><code>${escapeHtml(copy.dataSetId)}</code></td>
-        <td><span class="table-status ${copy.proofOverdue ? 'status-failed' : 'status-success'}">${copy.proofOverdue ? 'Overdue' : 'Current'}</span></td>
+        <td><span class="table-status ${proofStatus.className}">${proofStatus.label}</span></td>
         <td><span class="table-status ${copy.retrievalVerified ? 'status-success' : 'status-failed'}">${copy.retrievalVerified ? 'Verified' : 'Failed'}</span></td>
         <td>${copy.retrievalLatencyMs === null ? '-' : `${escapeHtml(copy.retrievalLatencyMs)} ms`}</td>
         <td>${escapeHtml(formatDate(copy.nextProofDueAt))}</td>
@@ -342,12 +371,14 @@ function renderMonitor() {
       ? formatDate(state.monitor.nextRunAt)
       : 'Not scheduled'
   }
-  elements.monitorSave.textContent = state.monitor ? 'Update & run now' : 'Enable & run now'
+  elements.monitorSave.textContent = state.monitor
+    ? 'Update schedule & run now'
+    : 'Enable monitoring & run now'
   updateMonitorAvailability()
 }
 
 function renderMonitorRuns() {
-  elements.deliveryCount.textContent = `${state.monitorRuns.length} runs`
+  elements.deliveryCount.textContent = `${state.monitorRuns.length} ${state.monitorRuns.length === 1 ? 'run' : 'runs'}`
   if (state.monitorRuns.length === 0) {
     elements.deliveryRows.innerHTML = '<tr><td colspan="8" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
     return
@@ -712,7 +743,7 @@ async function repairToTwoCopies() {
     }
 
     await loadWalletStorage(pieceCidString)
-    await runWalletCheck()
+    await runWalletCheck({ allowDuringRepair: true })
     showToast(`Second copy committed on provider ${targetProviderId?.toString() ?? 'new'} (data set ${commitResult.dataSetId.toString()})`)
   } catch (error) {
     const message = error?.shortMessage ?? error?.message ?? 'Could not repair this PieceCID'
@@ -805,13 +836,24 @@ async function chooseAnotherWallet() {
   }
 }
 
-async function runWalletCheck() {
-  if (!state.walletAddress || !state.selectedPiece) return
+async function runWalletCheck(options = {}) {
+  if (
+    !state.walletAddress || !state.selectedPiece || state.checking ||
+    (state.repairing && options.allowDuringRepair !== true)
+  ) return
   const walletAddress = state.walletAddress
   const pieceCid = state.selectedPiece.pieceCid
-  const original = elements.runCheck.textContent
+  state.checking = true
   elements.runCheck.disabled = true
-  elements.runCheck.textContent = 'Checking Filecoin...'
+  setActionBusy(
+    elements.runCheck,
+    elements.runCheckLabel,
+    elements.checkSpinner,
+    true,
+    'Check health',
+    'Checking...'
+  )
+  updateRepairAvailability()
   try {
     const result = await request('/api/wallet/check', {
       method: 'POST',
@@ -829,17 +871,33 @@ async function runWalletCheck() {
   } catch (error) {
     showToast(error.message, true)
   } finally {
-    elements.runCheck.disabled = !state.selectedPiece || !isCalibration()
-    elements.runCheck.textContent = original
+    state.checking = false
+    setActionBusy(
+      elements.runCheck,
+      elements.runCheckLabel,
+      elements.checkSpinner,
+      false,
+      'Check health',
+      'Checking...'
+    )
+    elements.runCheck.disabled = !state.selectedPiece || state.repairing || !isCalibration()
+    updateRepairAvailability()
   }
 }
 
 async function sendTestWebhook() {
-  if (!state.walletAddress) return
+  if (!state.walletAddress || state.testingWebhook) return
   const walletAddress = state.walletAddress
-  const original = elements.sendTest.textContent
+  state.testingWebhook = true
   elements.sendTest.disabled = true
-  elements.sendTest.textContent = 'Sending...'
+  setActionBusy(
+    elements.sendTest,
+    elements.sendTestLabel,
+    elements.testSpinner,
+    true,
+    'Test webhook',
+    'Sending...'
+  )
   try {
     await request('/api/test-webhook', {
       method: 'POST',
@@ -851,8 +909,16 @@ async function sendTestWebhook() {
   } catch (error) {
     showToast(error.message, true)
   } finally {
-    elements.sendTest.disabled = !state.walletAddress || !isCalibration()
-    elements.sendTest.textContent = original
+    state.testingWebhook = false
+    setActionBusy(
+      elements.sendTest,
+      elements.sendTestLabel,
+      elements.testSpinner,
+      false,
+      'Test webhook',
+      'Sending...'
+    )
+    updateMonitorAvailability()
   }
 }
 
@@ -877,7 +943,7 @@ elements.uploadFile.addEventListener('change', () => {
   elements.uploadFileName.textContent = file ? file.name : 'No file selected'
   elements.uploadResult.hidden = true
   elements.uploadResult.textContent = ''
-  setUploadStatus(file ? `${file.name} | ${(file.size / 1024).toFixed(1)} KB ready` : 'Choose a file to begin.', 0)
+  setUploadStatus(file ? `${file.name} | ${formatFileSize(file.size)} ready` : 'Choose a file to begin.', 0)
   updateUploadAvailability()
 })
 elements.uploadButton.addEventListener('click', uploadToFoc)

@@ -20,7 +20,7 @@ Point out the two provider copies. The separate **Switch wallet** control opens 
 
 ## 25-50 seconds: Filecoin health check
 
-Click **Run Filecoin check**.
+Select the PieceCID under **Your FOC storage**, then click **Check health**.
 
 "The server re-queries the wallet before every check. It refuses a PieceCID that does not belong to that wallet, derives provider retrieval URLs from the onchain registry, reads PDP timing, and validates the retrieved bytes against the PieceCID."
 
