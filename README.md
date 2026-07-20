@@ -64,7 +64,7 @@ Start the local API and signed demo receiver:
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use **Upload to FOC** to request two independently selected provider copies; if a secondary pull fails, Synapse SDK can retry with a replacement provider. MetaMask signs any required funding/approval and onchain commit actions. The resulting PieceCID is refreshed into the same wallet's monitor. The hackathon UI limits a selected file to 50 MB.
+Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use **Upload to FOC** to request two independently selected provider copies; if a secondary pull fails, Synapse SDK can retry with a replacement provider. MetaMask signs any required funding/approval and onchain commit actions. The resulting PieceCID is refreshed into the same wallet's monitor. The hackathon UI limits a selected file to 500 MB.
 
 You can also select any Piece already owned by the connected wallet. Use **Switch wallet** to reopen MetaMask's account picker; account changes clear all prior wallet data. Wallets without FOC data show an empty state and never fall back to the bundled demo receipt. File bytes are sent to the selected FOC provider, not to the Proofhook backend.
 

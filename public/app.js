@@ -4,7 +4,7 @@ import { custom, getAddress, stringToHex } from 'viem'
 
 const CALIBRATION_CHAIN_ID = '0x4cb2f'
 const CALIBRATION_CHAIN_ID_DECIMAL = 314159
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024
 
 const state = {
   walletAddress: null,
@@ -396,7 +396,7 @@ async function uploadToFoc() {
     return
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    showToast('MVP uploads are limited to 50 MB', true)
+    showToast('Uploads are limited to 500 MB', true)
     return
   }
 

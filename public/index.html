@@ -70,13 +70,13 @@
           <div class="upload-copy">
             <p class="eyebrow">WRITE TO FOC</p>
             <h2 id="upload-heading">Upload a file</h2>
-            <p>Your file goes directly from this browser to two FOC providers. Synapse retries a replacement provider if the second copy fails; any 1/2 result is flagged for repair. MetaMask signs the funding and onchain storage actions.</p>
+            <p>Your file goes directly from this browser to two FOC providers. Synapse retries a replacement provider if the second copy fails; any 1/2 result is flagged for repair. MetaMask signs the funding and onchain storage actions. Maximum file size: 500 MB.</p>
           </div>
           <div class="upload-control">
             <label class="file-picker" for="upload-file">
               <span class="file-picker-action">Choose file</span>
               <span class="file-picker-name" id="upload-file-name">No file selected</span>
-              <input class="visually-hidden" id="upload-file" type="file" aria-label="Choose a file to upload" />
+              <input class="visually-hidden" id="upload-file" type="file" aria-label="Choose a file to upload, maximum 500 MB" />
             </label>
             <button class="button button-primary" id="upload-button" type="button" disabled>Upload to FOC</button>
             <progress id="upload-progress" max="100" value="0"></progress>
