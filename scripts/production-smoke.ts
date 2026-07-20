@@ -47,11 +47,22 @@ assert(
     appPage.text.includes('Upload to FOC') &&
     appPage.text.includes('Choose file') &&
     appPage.text.includes('No file selected') &&
+    appPage.text.includes('Maximum file size: 500 MB') &&
+    appPage.text.includes('Health status definitions') &&
+    appPage.text.includes('Repair to 2 copies') &&
+    appPage.text.includes('wallet is offline') &&
+    appPage.text.includes('<th>Reason</th>') &&
     appPage.text.includes('Check every copy automatically') &&
     appPage.text.includes('Health run groups'),
   'FOC upload and scheduled monitor UI are deployed'
 )
-assert(appBundle.status === 200 && appBundle.text.length > 100_000, 'Synapse browser bundle is deployed')
+assert(
+  appBundle.status === 200 &&
+    appBundle.text.length > 100_000 &&
+    appBundle.text.includes('Checking approved providers (up to 10 seconds)') &&
+    appBundle.text.includes('below the 2-copy target'),
+  'Synapse provider selection and health reasons are deployed'
+)
 
 const storage = await request(`/api/wallet/${walletAddress}/pieces`)
 const scheduledMonitor = await request(`/api/wallet/${walletAddress}/monitor`)

@@ -39,7 +39,6 @@
           </div>
           <div class="actions">
             <button class="button button-secondary" id="send-test" type="button" disabled>Send test</button>
-            <button class="button button-secondary" id="repair-copy" type="button" hidden disabled>Repair to 2 copies</button>
             <button class="button button-primary" id="run-check" type="button" disabled>Run Filecoin check</button>
           </div>
         </div>
@@ -50,6 +49,7 @@
           <div class="summary-item">
             <span class="summary-label">Overall health</span>
             <span class="status-badge status-unknown" id="overall-health">Not checked</span>
+            <span class="health-reason" id="health-reason">Run a check to explain this PieceCID's status.</span>
           </div>
           <div class="summary-item summary-cid">
             <span class="summary-label">PieceCID</span>
@@ -65,12 +65,21 @@
         </div>
       </section>
 
+      <section class="status-guide" aria-label="Health status definitions">
+        <div class="status-guide-inner">
+          <div><span class="table-status status-success">healthy</span><span>At least 2 copies retrieve and no known proof is overdue.</span></div>
+          <div><span class="table-status status-degraded">degraded</span><span>Below 2 copies, a retrieval failed, or a proof is overdue.</span></div>
+          <div><span class="table-status status-failed">unhealthy</span><span>No provider copy can be retrieved.</span></div>
+          <div><span class="table-status status-unknown">unknown</span><span>No copies were found or checks were inconclusive.</span></div>
+        </div>
+      </section>
+
       <div class="workspace">
         <section class="upload-panel" aria-labelledby="upload-heading">
           <div class="upload-copy">
             <p class="eyebrow">WRITE TO FOC</p>
             <h2 id="upload-heading">Upload a file</h2>
-            <p>Your file goes directly from this browser to two FOC providers. Synapse retries a replacement provider if the second copy fails; any 1/2 result is flagged for repair. MetaMask signs the funding and onchain storage actions. Maximum file size: 500 MB.</p>
+            <p>Your file goes directly from this browser to two FOC providers. Proofhook checks chain-approved providers for up to 10 seconds before selecting two independent targets; any 1/2 result is flagged for repair. MetaMask signs the funding and onchain storage actions. Maximum file size: 500 MB.</p>
           </div>
           <div class="upload-control">
             <label class="file-picker" for="upload-file">
@@ -93,10 +102,13 @@
           </div>
           <div class="piece-control">
             <label for="piece-select">Piece to monitor</label>
-            <select id="piece-select" disabled>
-              <option value="">Connect wallet first</option>
-            </select>
             <span class="piece-meta" id="piece-meta">0 data sets | 0 pieces</span>
+            <div class="piece-select-row">
+              <select id="piece-select" disabled>
+                <option value="">Connect wallet first</option>
+              </select>
+              <button class="button button-secondary" id="repair-copy" type="button" hidden disabled>Repair to 2 copies</button>
+            </div>
           </div>
         </section>
 
@@ -104,7 +116,7 @@
           <div>
             <p class="eyebrow">AUTOMATION</p>
             <h2 id="monitor-heading">Check every copy automatically</h2>
-            <p class="monitor-description">Proofhook checks every PieceCID and every provider copy for this wallet, then sends one signed webhook per PieceCID.</p>
+            <p class="monitor-description">Proofhook checks every PieceCID and provider copy, then sends one signed webhook per PieceCID. Once enabled, Railway keeps running the schedule even when this browser is closed and the wallet is offline.</p>
           </div>
           <div class="monitor-control">
             <label for="monitor-interval">Interval</label>
@@ -160,15 +172,16 @@
                 <tr>
                   <th>Completed</th>
                   <th>Overall</th>
+                  <th>Reason</th>
                   <th>Pieces</th>
-                  <th>Healthy copies</th>
+                  <th>Verified copies</th>
                   <th>Webhooks</th>
                   <th>Interval</th>
                   <th><span class="visually-hidden">Action</span></th>
                 </tr>
               </thead>
               <tbody id="delivery-rows">
-                <tr><td colspan="7" class="empty-cell">No scheduled health runs yet.</td></tr>
+                <tr><td colspan="8" class="empty-cell">No scheduled health runs yet.</td></tr>
               </tbody>
             </table>
           </div>

@@ -1,4 +1,5 @@
 import { Synapse, calibration } from '@filoz/synapse-sdk'
+import { getEndorsedProviderIds } from '@filoz/synapse-core/endorsements'
 import * as Piece from '@filoz/synapse-core/piece'
 import { custom, getAddress, stringToHex } from 'viem'
 
@@ -34,6 +35,7 @@ const elements = {
   copyCid: document.querySelector('#copy-cid'),
   pieceCid: document.querySelector('#piece-cid'),
   overallHealth: document.querySelector('#overall-health'),
+  healthReason: document.querySelector('#health-reason'),
   lastChecked: document.querySelector('#last-checked'),
   copyCount: document.querySelector('#copy-count'),
   providerRows: document.querySelector('#provider-rows'),
@@ -125,6 +127,52 @@ function updateRepairAvailability() {
     !needsRepair || state.repairing || state.uploading || !state.walletAddress || !isCalibration()
 }
 
+function describePieceHealth(health) {
+  const copies = health?.copies ?? []
+  const verified = copies.filter((copy) => copy.retrievalVerified).length
+  const failedRetrievals = copies.length - verified
+  const overdueProofs = copies.filter((copy) => copy.proofOverdue === true).length
+
+  if (health?.state === 'healthy') {
+    return `${copies.length} provider copies retrieve successfully; no known proof is overdue.`
+  }
+  if (health?.state === 'degraded') {
+    if (copies.length < 2) {
+      return `Only ${copies.length} provider ${copies.length === 1 ? 'copy exists' : 'copies exist'}; at least 2 are required.`
+    }
+    if (overdueProofs > 0) {
+      return `${overdueProofs} provider ${overdueProofs === 1 ? 'proof is' : 'proofs are'} overdue.`
+    }
+    if (failedRetrievals > 0) {
+      return `${failedRetrievals} of ${copies.length} provider copies failed retrieval verification.`
+    }
+    return 'One or more copies failed the redundancy, retrieval, or proof policy.'
+  }
+  if (health?.state === 'unhealthy') {
+    return `None of the ${copies.length} provider copies passed retrieval verification.`
+  }
+  return copies.length === 0
+    ? 'No provider copies were found for this PieceCID.'
+    : 'The available provider checks were inconclusive.'
+}
+
+function describeMonitorRun(run) {
+  const results = run.results ?? []
+  const underReplicated = results.filter((result) => result.copyCount < 2).length
+  const unhealthy = results.filter((result) => result.state === 'unhealthy').length
+  const degraded = results.filter((result) => result.state === 'degraded').length
+  const unknown = results.filter((result) => result.state === 'unknown').length
+
+  if (run.error) return 'The wallet-wide run could not complete.'
+  if (unhealthy > 0) return `${unhealthy} PieceCID${unhealthy === 1 ? '' : 's'} had no retrievable copy.`
+  if (underReplicated > 0) {
+    return `${underReplicated} PieceCID${underReplicated === 1 ? '' : 's'} below the 2-copy target.`
+  }
+  if (degraded > 0) return `${degraded} PieceCID${degraded === 1 ? '' : 's'} failed retrieval or proof policy.`
+  if (unknown > 0) return `${unknown} PieceCID${unknown === 1 ? '' : 's'} produced inconclusive checks.`
+  return 'Every PieceCID meets the copy, retrieval, and proof policy.'
+}
+
 function setUploadStatus(message, progress = null) {
   elements.uploadStatus.textContent = message
   if (progress === null) {
@@ -158,11 +206,12 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.pieceCid.textContent = state.walletAddress ? 'No piece selected' : 'Connect wallet'
   elements.overallHealth.textContent = 'Not checked'
   elements.overallHealth.className = 'status-badge status-unknown'
+  elements.healthReason.textContent = 'Run a check to explain this PieceCID\'s status.'
   elements.lastChecked.textContent = 'Never'
   elements.copyCount.textContent = '0 copies'
   elements.providerRows.innerHTML = `<tr><td colspan="6" class="empty-cell">${escapeHtml(message)}</td></tr>`
   elements.deliveryCount.textContent = '0 runs'
-  elements.deliveryRows.innerHTML = '<tr><td colspan="7" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
+  elements.deliveryRows.innerHTML = '<tr><td colspan="8" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
   elements.payloadView.textContent = 'Select a scheduled run to inspect every PieceCID and provider copy.'
   elements.signatureState.textContent = 'No run selected'
   elements.signatureState.className = 'signature-state'
@@ -222,6 +271,9 @@ function selectPiece(pieceCid) {
   elements.pieceCid.textContent = state.selectedPiece?.pieceCid ?? 'No piece selected'
   elements.overallHealth.textContent = 'Not checked'
   elements.overallHealth.className = 'status-badge status-unknown'
+  elements.healthReason.textContent = state.selectedPiece
+    ? 'Run a check to explain this PieceCID\'s status.'
+    : 'Select a PieceCID to inspect its health.'
   elements.lastChecked.textContent = 'Never'
   elements.copyCount.textContent = `${state.selectedPiece?.copies.length ?? 0} copies`
   elements.runCheck.disabled = !state.selectedPiece || !isCalibration()
@@ -244,6 +296,7 @@ function renderHealth() {
   const health = state.health
   elements.overallHealth.textContent = health.state
   elements.overallHealth.className = `status-badge ${statusClass(health.state)}`
+  elements.healthReason.textContent = describePieceHealth(health)
   elements.lastChecked.textContent = formatDate(health.checkedAt)
   elements.copyCount.textContent = `${health.copies.length} copies`
   elements.providerRows.innerHTML = health.copies.map((copy) => {
@@ -269,7 +322,7 @@ function renderMonitor() {
   } else {
     elements.monitorInterval.value = String(state.monitor.intervalHours)
     elements.monitorStatus.textContent = state.monitor.enabled
-      ? `Enabled · every ${state.monitor.intervalHours} ${state.monitor.intervalHours === 1 ? 'hour' : 'hours'}`
+      ? `Enabled · every ${state.monitor.intervalHours} ${state.monitor.intervalHours === 1 ? 'hour' : 'hours'} · runs on Railway while the wallet is offline`
       : 'Paused'
     elements.monitorNextRun.textContent = state.monitor.nextRunAt
       ? formatDate(state.monitor.nextRunAt)
@@ -282,20 +335,24 @@ function renderMonitor() {
 function renderMonitorRuns() {
   elements.deliveryCount.textContent = `${state.monitorRuns.length} runs`
   if (state.monitorRuns.length === 0) {
-    elements.deliveryRows.innerHTML = '<tr><td colspan="7" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
+    elements.deliveryRows.innerHTML = '<tr><td colspan="8" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
     return
   }
-  elements.deliveryRows.innerHTML = state.monitorRuns.map((run, index) => `
-    <tr>
-      <td>${escapeHtml(formatDate(run.completedAt))}</td>
-      <td><span class="table-status ${statusClass(run.state)}">${escapeHtml(run.state)}</span></td>
-      <td>${run.pieceCount}</td>
-      <td>${run.healthyCopyCount}/${run.copyCount}</td>
-      <td>${run.webhooksDelivered}/${run.webhooksTotal}</td>
-      <td>${run.intervalHours}h</td>
-      <td><button class="row-action" type="button" data-run-index="${index}">View</button></td>
-    </tr>
-  `).join('')
+  elements.deliveryRows.innerHTML = state.monitorRuns.map((run, index) => {
+    const reason = describeMonitorRun(run)
+    return `
+      <tr>
+        <td>${escapeHtml(formatDate(run.completedAt))}</td>
+        <td><span class="table-status ${statusClass(run.state)}" title="${escapeHtml(reason)}">${escapeHtml(run.state)}</span></td>
+        <td class="run-reason">${escapeHtml(reason)}</td>
+        <td>${run.pieceCount}</td>
+        <td>${run.healthyCopyCount}/${run.copyCount}</td>
+        <td>${run.webhooksDelivered}/${run.webhooksTotal}</td>
+        <td>${run.intervalHours}h</td>
+        <td><button class="row-action" type="button" data-run-index="${index}">View</button></td>
+      </tr>
+    `
+  }).join('')
 }
 
 function selectMonitorRun(index) {
@@ -388,6 +445,44 @@ async function saveMonitor(enabled, runNow) {
   }
 }
 
+async function findReachableApprovedProviders(synapse, excludedProviderIds, onStatus) {
+  onStatus('Reading chain-approved providers...')
+  const [storageInfo, endorsedProviderIds] = await Promise.all([
+    synapse.storage.getStorageInfo(),
+    getEndorsedProviderIds(synapse.client),
+  ])
+  const excluded = new Set(excludedProviderIds.map(String))
+  const endorsed = new Set(endorsedProviderIds.map(String))
+  const copyCounts = new Map()
+  for (const storedPiece of state.pieces) {
+    for (const copy of storedPiece.copies) {
+      copyCounts.set(copy.providerId, (copyCounts.get(copy.providerId) ?? 0) + 1)
+    }
+  }
+
+  const candidates = storageInfo.providers
+    .filter((provider) => !excluded.has(provider.id.toString()))
+    .sort((left, right) => {
+      const endorsementDifference =
+        Number(endorsed.has(right.id.toString())) - Number(endorsed.has(left.id.toString()))
+      if (endorsementDifference !== 0) return endorsementDifference
+      return (copyCounts.get(right.id.toString()) ?? 0) - (copyCounts.get(left.id.toString()) ?? 0)
+    })
+
+  onStatus('Checking approved providers (up to 10 seconds)...')
+  const checks = await Promise.all(candidates.map(async (provider) => {
+    try {
+      const response = await fetch(new URL('pdp/ping', provider.pdp.serviceURL), {
+        signal: AbortSignal.timeout(10_000),
+      })
+      return { provider, available: response.ok }
+    } catch {
+      return { provider, available: false }
+    }
+  }))
+  return checks.filter((check) => check.available).map((check) => check.provider)
+}
+
 async function uploadToFoc() {
   const file = elements.uploadFile.files?.[0]
   if (!file || !state.walletAddress || !isCalibration() || state.uploading) return
@@ -407,7 +502,6 @@ async function uploadToFoc() {
   updateUploadAvailability()
 
   try {
-    setUploadStatus('Resolving two independent providers...', 0)
     const synapse = Synapse.create({
       account: getAddress(walletAddress),
       chain: calibration,
@@ -415,8 +509,18 @@ async function uploadToFoc() {
       source: 'proofhook',
       withCDN: false,
     })
+    const approvedProviders = await findReachableApprovedProviders(
+      synapse,
+      [],
+      (message) => setUploadStatus(message, 0)
+    )
+    if (approvedProviders.length < 2) {
+      throw new Error(`Only ${approvedProviders.length} approved provider${approvedProviders.length === 1 ? '' : 's'} responded within 10 seconds; 2 are required.`)
+    }
+    const providerIds = approvedProviders.slice(0, 2).map((provider) => provider.id)
     const contexts = await synapse.storage.createContexts({
       copies: 2,
+      providerIds,
       callbacks: {
         onProviderSelected: (provider) => {
           if (walletAddress === state.walletAddress) {
@@ -440,7 +544,7 @@ async function uploadToFoc() {
 
     setUploadStatus('Uploading to the primary provider...', 1)
     const result = await synapse.storage.upload(file.stream(), {
-      copies: 2,
+      contexts,
       pieceMetadata: {
         filename: file.name.slice(0, 160),
         contentType: (file.type || 'application/octet-stream').slice(0, 100),
@@ -478,6 +582,33 @@ async function uploadToFoc() {
     updateUploadAvailability()
     updateRepairAvailability()
   }
+}
+
+async function resolveRepairTarget(synapse, excludedProviderIds, walletAddress) {
+  const candidates = await findReachableApprovedProviders(
+    synapse,
+    excludedProviderIds,
+    (message) => { elements.repairCopy.textContent = message }
+  )
+
+  if (candidates.length === 0) {
+    throw new Error('No distinct chain-approved provider responded within 10 seconds. Retry when Calibration providers are available.')
+  }
+
+  let lastError = null
+  for (const provider of candidates) {
+    try {
+      if (walletAddress === state.walletAddress) {
+        elements.repairCopy.textContent = `Preparing provider ${provider.id.toString()}...`
+      }
+      const context = await synapse.storage.createContext({ providerId: provider.id })
+      return { context, providerId: provider.id }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError ?? new Error('No approved provider could create a repair context.')
 }
 
 async function repairToTwoCopies() {
@@ -518,18 +649,11 @@ async function repairToTwoCopies() {
       dataSetId: BigInt(sourceCopy.dataSetId),
     })
     const excludedProviderIds = selectedPiece.copies.map((copy) => BigInt(copy.providerId))
-    let targetProviderId = null
-    const targetContext = await synapse.storage.createContext({
-      excludeProviderIds: excludedProviderIds,
-      callbacks: {
-        onProviderSelected: (provider) => {
-          targetProviderId = provider.id
-          if (walletAddress === state.walletAddress) {
-            elements.repairCopy.textContent = `Preparing provider ${provider.id.toString()}...`
-          }
-        },
-      },
-    })
+    const { context: targetContext, providerId: targetProviderId } = await resolveRepairTarget(
+      synapse,
+      excludedProviderIds,
+      walletAddress
+    )
 
     if (walletAddress !== state.walletAddress || pieceCidString !== state.selectedPiece?.pieceCid) {
       throw new Error('Wallet or PieceCID changed during repair. Return to the original selection and retry.')

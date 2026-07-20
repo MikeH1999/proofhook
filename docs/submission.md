@@ -10,7 +10,7 @@ Applications that depend on Filecoin storage currently need to understand contra
 
 ## Product mechanism
 
-Connect MetaMask and either upload a file through Synapse SDK or select existing Pieces owned by that wallet. Set an automatic interval (3 hours by default) and sign it with MetaMask. Proofhook immediately checks every PieceCID and every provider copy, then repeats in the Railway backend while the browser is closed. Every interval becomes one grouped UI result and sends one HMAC-signed event per PieceCID.
+Connect MetaMask and either upload a file through Synapse SDK or select existing Pieces owned by that wallet. Set an automatic interval (3 hours by default) and sign it with MetaMask. Proofhook immediately checks every PieceCID and every provider copy, then repeats in the Railway backend while the browser is closed and the wallet is offline. Every interval becomes one grouped UI result with an explicit health reason and sends one HMAC-signed event per PieceCID.
 
 ## User flow
 
@@ -18,7 +18,7 @@ Connect MetaMask and either upload a file through Synapse SDK or select existing
 MetaMask
   -> Filecoin Calibration
   -> browser-to-FOC upload targeting two independent providers
-  -> automatic replacement selection if a secondary pull fails
+  -> 10-second health probe across current chain-approved providers
   -> MetaMask funding/approval + onchain PieceCID commit
   -> wallet-owned FOC data sets
   -> wallet-signed N-hour schedule (default 3h)

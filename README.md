@@ -29,7 +29,7 @@ Both copies have been independently retrieved and validated against the PieceCID
 MetaMask account
   -> switch to Filecoin Calibration
   -> optionally upload a file to two independently selected providers with Synapse SDK
-  -> retry a replacement provider if the secondary pull fails
+  -> allow up to 10 seconds for approved-provider health checks and select two targets
   -> fund/approve FOC through MetaMask when required
   -> commit the new PieceCID onchain under the connected payer
   -> query data sets where the wallet is the payer
@@ -64,13 +64,13 @@ Start the local API and signed demo receiver:
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use **Upload to FOC** to request two independently selected provider copies; if a secondary pull fails, Synapse SDK can retry with a replacement provider. MetaMask signs any required funding/approval and onchain commit actions. The resulting PieceCID is refreshed into the same wallet's monitor. The hackathon UI limits a selected file to 500 MB.
+Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use **Upload to FOC** to request two independently selected provider copies. Proofhook reads the current chain-approved list and allows up to 10 seconds for provider health responses before explicitly selecting two targets, avoiding false negatives from the SDK's shorter Calibration ping. MetaMask signs any required funding/approval and onchain commit actions. The resulting PieceCID is refreshed into the same wallet's monitor. The hackathon UI limits a selected file to 500 MB.
 
 You can also select any Piece already owned by the connected wallet. Use **Switch wallet** to reopen MetaMask's account picker; account changes clear all prior wallet data. Wallets without FOC data show an empty state and never fall back to the bundled demo receipt. File bytes are sent to the selected FOC provider, not to the Proofhook backend.
 
-Under **Check every copy automatically**, choose a whole-number interval from 1 to 168 hours (default `3`) and click **Enable & run now**. MetaMask signs the schedule without exposing a private key. The first all-copy run happens immediately; later runs execute on Railway even when the browser is closed. **Health run groups** shows one row per interval with aggregate state, Piece count, healthy-copy count, and Webhook delivery count. Use **Pause** to stop future runs.
+Under **Check every copy automatically**, choose a whole-number interval from 1 to 168 hours (default `3`) and click **Enable & run now**. MetaMask signs the schedule without exposing a private key. The first all-copy run happens immediately; later runs execute on Railway even when the browser is closed and the wallet is offline. **Health run groups** shows one row per interval with aggregate state, the specific reason for that state, Piece count, verified-copy count, and Webhook delivery count. Use **Pause** to stop future runs.
 
-Proofhook treats fewer than two provider copies as `degraded`. If an upload or later health check leaves fewer than two healthy copies, select the PieceCID and use **Repair to 2 copies**. A new provider pulls the existing Piece directly from a healthy provider and commits it onchain; the original file does not need to be selected again. This repair requires MetaMask authorization. Fully unattended paid repair while the wallet is offline would require a separately scoped session key and is outside this MVP.
+Proofhook treats fewer than two provider copies as `degraded`. If an upload or later health check leaves fewer than two healthy copies, select the PieceCID and use **Repair to 2 copies** beside the PieceCID selector. Proofhook reads the current chain-approved Provider list, allows up to 10 seconds for Calibration health responses, and explicitly selects a distinct reachable Provider. That provider pulls the existing Piece directly from a healthy provider and commits it onchain; the original file does not need to be selected again. This repair requires MetaMask authorization. Fully unattended paid repair while the wallet is offline would require a separately scoped session key and is outside this MVP.
 
 The runtime uses public Calibration RPC reads and does not read `FILECOIN_PRIVATE_KEY`.
 
@@ -78,7 +78,7 @@ The runtime uses public Calibration RPC reads and does not read `FILECOIN_PRIVAT
 
 Only the seed and wallet/provider info scripts use `FILECOIN_PRIVATE_KEY`. Never use a mainnet wallet or commit `.env`.
 
-The seed script's fixed demo fixture explicitly selects Calibration providers `4,2`. Browser uploads do not use this fixed pair; they allow Synapse SDK to select independent providers and replace a failed secondary.
+The seed script's fixed demo fixture explicitly selects Calibration providers `4,2`. Browser uploads do not use this fixed pair; they probe the current chain-approved list and explicitly select two responsive, independent providers.
 
 Create the two-provider demo fixture:
 

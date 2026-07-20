@@ -4,13 +4,11 @@ export function calculateHealthState(copies: CopyHealth[]): HealthState {
   if (copies.length === 0) return 'unknown'
 
   const verifiedCount = copies.filter((copy) => copy.retrievalVerified).length
-  const knownProofs = copies.filter((copy) => copy.proofOverdue !== null)
-  const allKnownProofsOverdue =
-    knownProofs.length === copies.length && knownProofs.every((copy) => copy.proofOverdue)
+  const hasOverdueProof = copies.some((copy) => copy.proofOverdue === true)
 
   if (verifiedCount === 0) return copies.every((copy) => copy.error !== null) ? 'unhealthy' : 'unknown'
   if (copies.length < 2) return 'degraded'
-  if (verifiedCount < copies.length || allKnownProofsOverdue) return 'degraded'
+  if (verifiedCount < copies.length || hasOverdueProof) return 'degraded'
   return 'healthy'
 }
 

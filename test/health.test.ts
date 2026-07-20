@@ -48,6 +48,13 @@ describe('calculateHealthState', () => {
     )
   })
 
+  it('is degraded when any provider proof is overdue', () => {
+    assert.equal(
+      calculateHealthState([copy({ proofOverdue: true }), copy({ providerId: '2' })]),
+      'degraded'
+    )
+  })
+
   it('is unhealthy when every copy fails', () => {
     assert.equal(
       calculateHealthState([
