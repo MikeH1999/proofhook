@@ -151,6 +151,8 @@ No private key or pre-known deployment domain is required. Manual checks derive 
 
 See `docs/deployment.md` for the complete GitHub and Railway runbook.
 
+See `docs/demo-videos.md` for four 60–90 second feature-specific demo scripts covering wallet health checks, FOC upload and repair, scheduled Webhooks, and wallet/provider debugging.
+
 ## Checking an imported Synapse receipt
 
 `POST /api/check` accepts a Synapse upload receipt, a webhook URL, and a caller-defined subscription ID. Proofhook reads the public PDP state and validates the declared provider retrieval URLs; the monitored data set does not need to be owned by the Proofhook service wallet.
