@@ -68,7 +68,7 @@ Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use 
 
 You can also select any Piece already owned by the connected wallet. Use **Switch wallet** to reopen MetaMask's account picker; account changes clear all prior wallet data. Wallets without FOC data show an empty state and never fall back to the bundled demo receipt. File bytes are sent to the selected FOC provider, not to the Proofhook backend.
 
-Select a PieceCID under **Your FOC storage**, then use **Check health** to run an immediate PDP, retrieval, PieceCID validation, and signed Webhook flow. The selected Piece's health summary and Provider-copy table stay directly below that control. Use **Repair to 2 copies** when the selected Piece is below the redundancy target.
+Select a PieceCID under **Your FOC storage**, then use **Check health** to run an immediate PDP, retrieval, PieceCID validation, and signed Webhook flow. The selected Piece's health summary and Provider-copy table stay directly below that control, with an **Open retrieval URL** link for every provider copy. Use **Repair to 2 copies** when the selected Piece is below the redundancy target.
 
 Under **Check every copy automatically**, choose a whole-number interval from 1 to 168 hours (default `3`) and click **Enable monitoring & run now**. MetaMask signs the schedule without exposing a private key. The first all-copy run happens immediately; later runs execute on Railway even when the browser is closed and the wallet is offline. **Health run groups** shows one row per interval with aggregate state, the specific reason for that state, Piece count, verified-copy count, and Webhook delivery count. Use **Pause monitoring** to stop future runs or **Test webhook** to verify the built-in HMAC receiver.
 

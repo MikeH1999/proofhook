@@ -161,6 +161,10 @@ tbody tr:hover td { background: #fafbfc; }
 td code { font-size: 12px; }
 .provider-cell { display: flex; align-items: center; gap: 9px; font-weight: 700; }
 .provider-role { color: var(--muted); font-size: 11px; font-weight: 600; }
+.retrieval-cell { display: flex; align-items: flex-start; flex-direction: column; gap: 5px; }
+.retrieval-link { color: var(--blue); font-size: 11px; font-weight: 700; line-height: 1.25; text-decoration: none; white-space: nowrap; }
+.retrieval-link:hover { text-decoration: underline; }
+.retrieval-link:focus-visible { border-radius: 2px; outline: 2px solid rgba(9,105,218,.28); outline-offset: 2px; }
 .empty-cell { height: 92px; color: var(--muted); text-align: center; }
 .row-action { padding: 5px 8px; border: 0; background: transparent; color: var(--blue); cursor: pointer; font-size: 12px; font-weight: 700; }
 .run-reason { color: var(--muted); font-size: 12px; line-height: 1.4; }

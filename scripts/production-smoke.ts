@@ -65,6 +65,7 @@ assert(
   appBundle.status === 200 &&
     appBundle.text.length > 100_000 &&
     appBundle.text.includes('en-US') &&
+    appBundle.text.includes('Open retrieval URL') &&
     appBundle.text.includes('Checking approved providers (up to 10 seconds)') &&
     appBundle.text.includes('Funding submitted. Waiting for confirmation') &&
     appBundle.text.includes('below the 2-copy target'),
@@ -125,6 +126,12 @@ assert(
     (copy: any) => copy.retrievalVerified === true && copy.proofOverdue === false
   ),
   'both copies pass PDP freshness and retrieval verification'
+)
+assert(
+  realCheck.body.health.copies.every(
+    (copy: any) => typeof copy.retrievalUrl === 'string' && /^https?:\/\//.test(copy.retrievalUrl)
+  ),
+  'real health result exposes every copy retrieval URL'
 )
 assert(realCheck.body.delivery?.status === 202, 'real health event reaches the signed receiver')
 

@@ -92,6 +92,18 @@ function formatCopyCount(count) {
   return `${count} ${count === 1 ? 'copy' : 'copies'}`
 }
 
+function renderRetrievalLink(value) {
+  if (!value) return ''
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) return ''
+    const safeUrl = escapeHtml(url.href)
+    return `<a class="retrieval-link" href="${safeUrl}" target="_blank" rel="noopener noreferrer" title="${safeUrl}">Open retrieval URL <span aria-hidden="true">↗</span></a>`
+  } catch {
+    return ''
+  }
+}
+
 function formatDate(value) {
   if (!value) return 'Pending first proof'
   return new Intl.DateTimeFormat('en-US', {
@@ -322,7 +334,7 @@ function selectPiece(pieceCid) {
       <td><div class="provider-cell"><span>${escapeHtml(copy.providerName)}</span><span class="provider-role">#${escapeHtml(copy.providerId)}</span></div></td>
       <td><code>${escapeHtml(copy.dataSetId)}</code></td>
       <td><span class="table-status status-pending">Ready</span></td>
-      <td><span class="table-status status-pending">Not checked</span></td>
+      <td><div class="retrieval-cell"><span class="table-status status-pending">Not checked</span>${renderRetrievalLink(copy.retrievalUrl)}</div></td>
       <td>-</td>
       <td>-</td>
     </tr>
@@ -349,7 +361,7 @@ function renderHealth() {
         <td><div class="provider-cell"><span>${escapeHtml(source?.providerName ?? `Provider ${copy.providerId}`)}</span><span class="provider-role">#${escapeHtml(copy.providerId)}</span></div></td>
         <td><code>${escapeHtml(copy.dataSetId)}</code></td>
         <td><span class="table-status ${proofStatus.className}">${proofStatus.label}</span></td>
-        <td><span class="table-status ${copy.retrievalVerified ? 'status-success' : 'status-failed'}">${copy.retrievalVerified ? 'Verified' : 'Failed'}</span></td>
+        <td><div class="retrieval-cell"><span class="table-status ${copy.retrievalVerified ? 'status-success' : 'status-failed'}">${copy.retrievalVerified ? 'Verified' : 'Failed'}</span>${renderRetrievalLink(copy.retrievalUrl ?? source?.retrievalUrl)}</div></td>
         <td>${copy.retrievalLatencyMs === null ? '-' : `${escapeHtml(copy.retrievalLatencyMs)} ms`}</td>
         <td>${escapeHtml(formatDate(copy.nextProofDueAt))}</td>
       </tr>`
