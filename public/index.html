@@ -10,10 +10,17 @@
   <body>
     <header class="app-header">
       <div class="header-inner">
-        <a class="brand" href="/" aria-label="Proofhook home">
-          <span class="brand-mark" aria-hidden="true">P</span>
-          <span>Proofhook</span>
-        </a>
+        <div class="brand-cluster">
+          <a class="brand" href="/" aria-label="Proofhook home">
+            <span class="brand-mark" aria-hidden="true">P</span>
+            <span>Proofhook</span>
+          </a>
+          <span class="brand-divider" aria-hidden="true"></span>
+          <a class="foc-brand" href="https://docs.filecoin.cloud/" target="_blank" rel="noopener noreferrer" aria-label="Filecoin Onchain Cloud documentation">
+            <img src="/foc-logo.svg" alt="" aria-hidden="true" />
+            <span>Filecoin Onchain Cloud</span>
+          </a>
+        </div>
         <div class="header-actions">
           <div class="network-status" id="network-status">
             <span class="network-dot" aria-hidden="true"></span>
@@ -154,11 +161,14 @@
             <p class="monitor-target"><strong>Webhook target</strong> Built-in HMAC-verified receiver</p>
           </div>
           <div class="monitor-control">
-            <label for="monitor-interval">Interval</label>
-            <div class="interval-input">
-              <input id="monitor-interval" type="number" min="1" max="168" step="1" value="3" disabled />
-              <span>hours</span>
+            <div class="monitor-schedule">
+              <label for="monitor-interval">Check interval</label>
+              <div class="interval-input">
+                <input id="monitor-interval" type="number" min="1" max="168" step="1" value="3" disabled />
+                <span>hours</span>
+              </div>
             </div>
+            <p class="monitor-next">Next run: <strong id="monitor-next-run">Not scheduled</strong></p>
             <div class="monitor-actions">
               <button class="button button-primary" id="monitor-save" type="button" disabled>Enable monitoring &amp; run now</button>
               <button class="button button-secondary" id="monitor-pause" type="button" hidden disabled>Pause monitoring</button>
@@ -168,7 +178,6 @@
               </button>
             </div>
             <p class="monitor-status" id="monitor-status">Connect MetaMask to configure automatic checks.</p>
-            <p class="monitor-next">Next run: <strong id="monitor-next-run">Not scheduled</strong></p>
           </div>
         </section>
 

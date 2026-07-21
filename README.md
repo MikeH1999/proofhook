@@ -4,6 +4,7 @@ Proofhook turns Filecoin Onchain Cloud health into signed HTTP webhooks.
 
 - Live demo: https://proofhook-production.up.railway.app
 - Source: https://github.com/MikeH1999/proofhook
+- The FOC mark is the official logo served by https://docs.filecoin.cloud/ and is stored locally as `public/foc-logo.svg`.
 
 The MVP connects MetaMask, uploads a file directly from the browser to two FOC providers, and discovers the connected wallet's FOC data sets on Calibration. A wallet-signed schedule (3 hours by default) then checks every PieceCID and every provider copy, groups each run in the UI, and delivers normalized HMAC-signed events.
 
