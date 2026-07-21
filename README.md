@@ -1,121 +1,244 @@
+<p align="center">
+  <img src="public/proofhook-mark.svg" width="80" height="80" alt="Proofhook logo" />
+</p>
+
 # Proofhook
 
-Proofhook turns Filecoin Onchain Cloud health into signed HTTP webhooks.
+Proofhook turns wallet-scoped Filecoin Onchain Cloud storage health into signed, retrying HTTP Webhooks.
 
-- Live demo: https://proofhook-production.up.railway.app
-- Source: https://github.com/MikeH1999/proofhook
-- The FOC mark is the official logo served by https://docs.filecoin.cloud/ and is stored locally as `public/foc-logo.svg`.
+- Live application: https://proofhook-production.up.railway.app
+- Source repository: https://github.com/MikeH1999/proofhook
+- Network: Filecoin Calibration
+- Runtime wallet key: not required
 
-The MVP connects MetaMask, uploads a file directly from the browser to two FOC providers, and discovers the connected wallet's FOC data sets on Calibration. A wallet-signed schedule (3 hours by default) then checks every PieceCID and every provider copy, groups each run in the UI, and delivers normalized HMAC-signed events.
+## Why Proofhook
 
-## MVP event types
+Applications that depend on Filecoin storage should not need to poll contracts, interpret PDP epochs, discover provider endpoints, download every copy, validate PieceCIDs, and build reliable alert delivery.
 
-- `piece.health.checked`: a real Filecoin health check completed.
-- `piece.health.degraded`: one or more health requirements failed.
-- `webhook.test`: connectivity test only; never presented as a Filecoin event.
-
-## Live Calibration fixture
-
-- PieceCID: `bafkzcibd7abqltt56fv3bmluogfje7chexq4teeo6cyiyjz2eb2kcflkpj5uujak`
-- Endorsed primary: provider `4`, data set `19731`
-- Approved secondary: provider `2`, data set `19730`
-- Primary commit: [0x4e4a…feea9](https://filecoin-testnet.blockscout.com/tx/0x4e4a6b1f55a448a3534c70f54f562f1d484c8b8cf50bc5c1da8f6d076eafeea9)
-- Secondary commit: [0xb9e6…809ba](https://filecoin-testnet.blockscout.com/tx/0xb9e653ab677b012978b703ea4d353b9e2e003082261e2ba675f995aa5cb809ba)
-
-Both copies have been independently retrieved and validated against the PieceCID through Synapse SDK. PDP proof timing is read from the corresponding on-chain data sets.
-
-## Wallet flow
+Proofhook provides one clear mechanism:
 
 ```text
-MetaMask account
-  -> switch to Filecoin Calibration
-  -> optionally upload a file to two independently selected providers with Synapse SDK
-  -> allow up to 10 seconds for approved-provider health checks and select two targets
-  -> fund/approve FOC through MetaMask when required
-  -> commit the new PieceCID onchain under the connected payer
-  -> query data sets where the wallet is the payer
-  -> sign an automatic interval (default 3 hours)
-  -> check every wallet PieceCID and every provider copy per run
-  -> group the run result with Piece/copy/Webhook totals
-  -> select one of that wallet's active PieceCIDs
-  -> revalidate wallet ownership on the server
-  -> read PDP status for every matching data set
-  -> retrieve from every provider
-  -> validate bytes against PieceCID
-  -> normalize health
-  -> sign event with HMAC-SHA256
-  -> deliver HTTP webhook
-  -> persist delivery result
+Filecoin storage state -> explainable health result -> signed Webhook
 ```
 
-## Local setup
+The connected MetaMask account is the data boundary. Proofhook discovers that wallet's Filecoin Onchain Cloud data sets and Pieces, checks every provider copy, and emits a normalized event that an ordinary backend can consume.
 
-Requirements: Node.js 22 or newer and MetaMask. The connected account only needs Calibration storage data; the browser never sends a private key to Proofhook.
+## Current product
 
-```bash
-npm install
-cp .env.example .env
+### Wallet-scoped FOC discovery
+
+- Connect or switch MetaMask accounts.
+- Switch to Filecoin Calibration when required.
+- Discover Warm Storage data sets where the connected wallet is the payer.
+- Group the same PieceCID across independent provider copies.
+- Clear all prior Piece, health, and delivery state when the account changes.
+- Show a real empty state for wallets without FOC storage; never substitute demo data.
+
+### Direct upload to Filecoin Onchain Cloud
+
+- Upload files up to 500 MB from the browser with Synapse SDK.
+- Send file bytes directly to FOC providers; Proofhook's backend never receives the file.
+- Read the current approved and endorsed provider list.
+- Allow up to 10 seconds for Calibration provider health responses.
+- Select two distinct reachable providers.
+- Use MetaMask for funding, approval, and onchain storage commits.
+- Refresh the resulting PieceCID into the connected wallet's storage view.
+
+### Piece health checks
+
+For a selected PieceCID, Proofhook:
+
+1. Rebuilds wallet, data-set, Piece, and provider relationships from public chain state.
+2. Rejects a PieceCID that does not belong to the requested wallet.
+3. Reads PDP proving state and the next proof deadline for every copy.
+4. Retrieves bytes independently from every provider.
+5. Validates each retrieval against the expected PieceCID.
+6. Records retrieval latency and the provider Retrieval URL.
+7. Calculates an explainable health state.
+8. Delivers the result as an HMAC-signed Webhook.
+
+Each Provider row exposes an **Open retrieval URL** link so developers can inspect the exact endpoint used by the check.
+
+### Two-copy repair
+
+Proofhook treats fewer than two healthy provider copies as degraded. When a selected Piece is below the target, **Repair to 2 copies** appears beside the PieceCID selector.
+
+Repair does not require the original file:
+
+```text
+healthy provider -> approved replacement provider -> onchain commit
 ```
 
-Run the deterministic submission checks with `npm run verify`. Add a real Calibration PDP/retrieval check with `npm run verify:live`.
+The replacement provider pulls the existing Piece from a healthy provider. MetaMask still authorizes funding and the onchain commit. Fully unattended paid repair is intentionally outside the MVP.
 
-Start the local API and signed demo receiver:
+### Automatic wallet monitoring
 
-```bash
-npm run dev
+- Configure an interval from 1 to 168 hours; the default is 3 hours.
+- Sign schedule changes with the same MetaMask wallet.
+- Run the first wallet-wide check immediately.
+- Check every PieceCID and every provider copy on each interval.
+- Persist schedules and grouped run history on Railway.
+- Continue routine checks while the browser is closed and the wallet is offline.
+- Pause or update the schedule from the UI.
+
+Offline monitoring does not authorize paid repair. Repair still requires a new MetaMask confirmation.
+
+### Signed Webhooks and run history
+
+- Send one health event per PieceCID.
+- Sign the exact body with HMAC-SHA256.
+- Retry delivery with bounded delays of 0, 2, and 5 seconds.
+- Display HTTP status, attempt count, response excerpt, duration, and signature verification.
+- Group every scheduled interval by overall state, reason, Piece count, verified-copy count, and Webhook totals.
+- Include a built-in HMAC-verified receiver for the public demo.
+- Allow caller-supplied Webhook targets only through admin-protected API routes.
+
+## Health policy
+
+| State | Meaning |
+| --- | --- |
+| `healthy` | At least two copies exist, every copy retrieves and validates, and no known proof is overdue. |
+| `degraded` | Fewer than two copies exist, a retrieval failed, or a proof is overdue. |
+| `unhealthy` | No provider copy can be retrieved. |
+| `unknown` | No copies were found or the available checks were inconclusive. |
+
+A PDP value of `Pending` means the first proof is not yet available; it is not presented as `Current`.
+
+## Filecoin and FOC primitives
+
+Proofhook demonstrates these Filecoin Onchain Cloud building blocks:
+
+- Synapse SDK browser uploads and provider selection.
+- PieceCID parsing, retrieval, and byte validation.
+- Warm Storage data sets scoped by payer address.
+- PDP active Pieces, challenge epochs, proving windows, and deadlines.
+- Service Provider Registry IDs and PDP service URLs.
+- Independent copies on distinct approved providers.
+- Provider-to-provider Piece transfer for repair.
+- MetaMask-authorized Filecoin Calibration transactions.
+- Public Calibration RPC reads.
+
+## Architecture
+
+```text
+Browser
+  |-- MetaMask ----------------------> Filecoin Calibration transactions
+  |-- Synapse SDK -------------------> FOC provider upload / repair
+  |-- Proofhook UI ------------------> wallet-scoped API
+                                        |
+Proofhook API                            |-- public Calibration RPC reads
+  |                                     |-- PDP state inspection
+  |                                     |-- provider retrieval + PieceCID validation
+  |                                     `-- health normalization
+  |
+  |-- HMAC-signed delivery ----------> Webhook receiver
+  `-- persistent monitor store ------> Railway volume
 ```
 
-Open `http://127.0.0.1:3000/`, connect MetaMask, and switch to Calibration. Use **Upload to FOC** to request two independently selected provider copies. Proofhook reads the current chain-approved list and allows up to 10 seconds for provider health responses before explicitly selecting two targets, avoiding false negatives from the SDK's shorter Calibration ping. MetaMask signs any required funding/approval and onchain commit actions. The resulting PieceCID is refreshed into the same wallet's monitor. The hackathon UI limits a selected file to 500 MB.
+The frontend is a compact static application. Fastify serves the UI and API. Railway runs one service instance with a persistent `/app/data` volume for delivery and monitor state.
 
-You can also select any Piece already owned by the connected wallet. Use **Switch wallet** to reopen MetaMask's account picker; account changes clear all prior wallet data. Wallets without FOC data show an empty state and never fall back to the bundled demo receipt. File bytes are sent to the selected FOC provider, not to the Proofhook backend.
+## Project evolution
 
-Select a PieceCID under **Your FOC storage**, then use **Check health** to run an immediate PDP, retrieval, PieceCID validation, and signed Webhook flow. The selected Piece's health summary and Provider-copy table stay directly below that control, with an **Open retrieval URL** link for every provider copy. Use **Repair to 2 copies** when the selected Piece is below the redundancy target.
+The implementation moved from a narrow receipt demo to a wallet-scoped FOC utility:
 
-Under **Check every copy automatically**, choose a whole-number interval from 1 to 168 hours (default `3`) and click **Enable monitoring & run now**. MetaMask signs the schedule without exposing a private key. The first all-copy run happens immediately; later runs execute on Railway even when the browser is closed and the wallet is offline. **Health run groups** shows one row per interval with aggregate state, the specific reason for that state, Piece count, verified-copy count, and Webhook delivery count. Use **Pause monitoring** to stop future runs or **Test webhook** to verify the built-in HMAC receiver.
+1. Replaced local private-key interaction with MetaMask account and network controls.
+2. Scoped all displayed storage and delivery data to the connected wallet.
+3. Added direct browser-to-FOC uploads with a 500 MB UI limit.
+4. Added explicit two-provider selection after Calibration health probes.
+5. Added two-copy health policy and wallet-authorized repair without re-upload.
+6. Expanded manual checks into persistent N-hour wallet-wide monitoring.
+7. Replaced a flat delivery list with grouped interval results and detailed JSON evidence.
+8. Added bounded concurrency and Webhook retry behavior to avoid provider and receiver bursts.
+9. Added SSRF protection, admin-only custom targets, wallet authorization replay protection, and rate limits.
+10. Added provider Retrieval URL links, English date formatting, responsive controls, status explanations, and loading states.
+11. Reorganized the UI around the user workflow and added Proofhook and official FOC branding.
 
-Proofhook treats fewer than two provider copies as `degraded`. If an upload or later health check leaves fewer than two healthy copies, select the PieceCID and use **Repair to 2 copies** beside the PieceCID selector. Proofhook reads the current chain-approved Provider list, allows up to 10 seconds for Calibration health responses, and explicitly selects a distinct reachable Provider. That provider pulls the existing Piece directly from a healthy provider and commits it onchain; the original file does not need to be selected again. This repair requires MetaMask authorization. Fully unattended paid repair while the wallet is offline would require a separately scoped session key and is outside this MVP.
+## Live Calibration evidence
 
-The runtime uses public Calibration RPC reads and does not read `FILECOIN_PRIVATE_KEY`.
+The public production smoke test uses this real two-copy fixture:
 
-### Optional demo fixture
+- PieceCID: `bafkzcibd7abqltt56fv3bmluogfje7chexq4teeo6cyiyjz2eb2kcflkpj5uujak`
+- Endorsed provider: `4`, data set `19731`
+- Approved provider: `2`, data set `19730`
+- [Provider 4 commit](https://filecoin-testnet.blockscout.com/tx/0x4e4a6b1f55a448a3534c70f54f562f1d484c8b8cf50bc5c1da8f6d076eafeea9)
+- [Provider 2 commit](https://filecoin-testnet.blockscout.com/tx/0xb9e653ab677b012978b703ea4d353b9e2e003082261e2ba675f995aa5cb809ba)
 
-Only the seed and wallet/provider info scripts use `FILECOIN_PRIVATE_KEY`. Never use a mainnet wallet or commit `.env`.
+Both copies are independently retrieved and validated against the PieceCID. PDP timing is read from their onchain data sets, and the resulting event is accepted by the signed receiver with HTTP `202`.
 
-The seed script's fixed demo fixture explicitly selects Calibration providers `4,2`. Browser uploads do not use this fixed pair; they probe the current chain-approved list and explicitly select two responsive, independent providers.
+## Local development
 
-Create the two-provider demo fixture:
+Requirements:
 
-```bash
-npm run seed
+- Node.js 22 or newer
+- MetaMask for wallet UI flows
+- A Filecoin Calibration account for upload or repair transactions
+
+Install dependencies and create a local environment file:
+
+```powershell
+npm.cmd install
+Copy-Item .env.example .env
 ```
 
-Check its PDP and retrieval health:
+Start the development server:
 
-```bash
-npm run check:piece
+```powershell
+npm.cmd run dev
 ```
 
-Then send a connectivity event:
+Open `http://127.0.0.1:3000`, connect MetaMask, and select Filecoin Calibration.
 
-```bash
-curl -X POST http://127.0.0.1:3000/api/test-webhook \
-  -H "content-type: application/json" \
-  -d "{}"
-```
+The running Web service does not read `FILECOIN_PRIVATE_KEY`. That optional value is used only by the seed and provider-info scripts. Never use a mainnet key or commit `.env`.
 
-Run the real Filecoin check and deliver it to the demo receiver:
+## Environment variables
 
-```bash
-curl -X POST http://127.0.0.1:3000/api/check-demo \
-  -H "content-type: application/json" \
-  -d "{}"
-```
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | HTTP port; defaults to `3000`. |
+| `HOST` | Bind address; defaults to `127.0.0.1`, while the container uses `0.0.0.0`. |
+| `PROOFHOOK_WEBHOOK_SECRET` | HMAC secret for outgoing events and the built-in receiver. Use a random production value. |
+| `PROOFHOOK_DEMO_WEBHOOK_URL` | Optional legacy demo scheduler target. `auto` uses the current public host for manual demo checks. |
+| `PROOFHOOK_PUBLIC_URL` | Public base URL used by persisted wallet schedules outside Railway. |
+| `PROOFHOOK_RECEIPT_PATH` | Path to the optional demo receipt. |
+| `PROOFHOOK_DELIVERY_LOG_PATH` | Persistent delivery history path. |
+| `PROOFHOOK_MONITOR_STATE_PATH` | Persistent wallet schedule and grouped run path. |
+| `PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS` | Allow local/private receiver URLs in development; set `false` in production. |
+| `PROOFHOOK_SCHEDULE_SECONDS` | Optional legacy receipt scheduler; wallet schedules use their signed hour interval instead. |
+| `PROOFHOOK_ADMIN_KEY` | Protects unscoped logs, imported receipts, and custom Webhook targets. |
+| `PROOFHOOK_PROVIDER_IDS` | Exactly two provider IDs used by the optional seed script, not normal browser uploads. |
+| `FILECOIN_PRIVATE_KEY` | Optional Calibration-only key for seed/info scripts; never used by the Web runtime. |
 
-Inspect received events at `GET /demo/inbox`.
+## Useful commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm.cmd run dev` | Start the development server with reload. |
+| `npm.cmd run verify` | Type-check, run 21 tests, build, and run the high-severity dependency audit. |
+| `npm.cmd run verify:live` | Run `verify` plus a real public Calibration Piece check. |
+| `npm.cmd run smoke:production` | Exercise the deployed UI, APIs, real Piece health, HMAC receiver, permissions, and rate limits. |
+| `npm.cmd run build` | Build the server and bundled browser application. |
+| `npm.cmd run start:prod` | Run the compiled production server. |
+| `npm.cmd run seed` | Create the optional fixed two-provider fixture; requires `FILECOIN_PRIVATE_KEY`. |
+| `npm.cmd run providers:info` | Inspect seed-script providers; requires `FILECOIN_PRIVATE_KEY`. |
+
+## API surface
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/health` | Deployment health check. |
+| `GET /api/wallet/:address/datasets` | Read wallet-owned FOC data sets. |
+| `GET /api/wallet/:address/pieces` | Read wallet-owned PieceCIDs and provider copies. |
+| `POST /api/wallet/check` | Revalidate ownership, check one Piece, and send a signed event. |
+| `GET /api/wallet/:address/monitor` | Read the wallet schedule and recent grouped runs. |
+| `POST /api/wallet/monitor` | Create, update, pause, or immediately run a wallet-signed schedule. |
+| `POST /api/test-webhook` | Send a connectivity-only test event. |
+| `GET /api/deliveries` | Read wallet-scoped delivery history; unscoped access requires admin authorization. |
+| `GET /demo/inbox` | Inspect the built-in HMAC-verified receiver. |
+| `POST /api/check` | Check an imported Synapse receipt and custom target; requires admin authorization. |
 
 ## Webhook verification
 
-Proofhook sends:
+Proofhook sends these headers:
 
 ```text
 X-Proofhook-Event-Id
@@ -123,7 +246,7 @@ X-Proofhook-Timestamp
 X-Proofhook-Signature: v1=<hex digest>
 ```
 
-Verify the signature over the exact request bytes:
+The signature covers `timestamp + "." + rawBody`:
 
 ```ts
 const expected = createHmac('sha256', secret)
@@ -131,64 +254,73 @@ const expected = createHmac('sha256', secret)
   .digest('hex')
 ```
 
-## Deployment
+Event types:
 
-The verified public deployment is available at `https://proofhook-production.up.railway.app`.
+- `piece.health.checked`
+- `piece.health.degraded`
+- `webhook.test`
 
-The repository includes a production Dockerfile and Railway configuration. Set:
-
-```text
-PROOFHOOK_WEBHOOK_SECRET=<random secret>
-PROOFHOOK_DEMO_WEBHOOK_URL=auto
-PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS=false
-PROOFHOOK_PROVIDER_IDS=4,2
-PROOFHOOK_SCHEDULE_SECONDS=0
-PROOFHOOK_RECEIPT_PATH=/app/fixtures/demo-receipt.json
-PROOFHOOK_DELIVERY_LOG_PATH=/app/data/delivery-log.json
-PROOFHOOK_ADMIN_KEY=<optional key for POST /api/check>
-```
-
-No private key or pre-known deployment domain is required. Manual checks derive the signed demo receiver URL from the current public request. If the optional scheduler is enabled, set `PROOFHOOK_DEMO_WEBHOOK_URL=https://<deployment-domain>/demo/receiver` explicitly. The public Calibration receipt is included in `fixtures/demo-receipt.json` for that scheduler/demo endpoint. Mount a persistent Railway volume at `/app/data` for delivery history. Keep the service at one replica while the MVP uses its in-process scheduler.
-
-See `docs/deployment.md` for the complete GitHub and Railway runbook.
-
-See `docs/demo-videos.md` for four 60–90 second feature-specific demo scripts covering wallet health checks, FOC upload and repair, scheduled Webhooks, and wallet/provider debugging.
-
-## Checking an imported Synapse receipt
-
-`POST /api/check` accepts a Synapse upload receipt, a webhook URL, and a caller-defined subscription ID. Proofhook reads the public PDP state and validates the declared provider retrieval URLs; the monitored data set does not need to be owned by the Proofhook service wallet.
-
-```json
-{
-  "subscriptionId": "release-artifacts",
-  "webhookUrl": "https://example.com/filecoin-events",
-  "receipt": {
-    "chain": "calibration",
-    "pieceCid": "bafkzcib...",
-    "size": 512,
-    "createdAt": "2026-07-16T13:25:34.261Z",
-    "transactionHashes": [],
-    "copies": [
-      {
-        "providerId": "4",
-        "dataSetId": "19731",
-        "pieceId": "0",
-        "retrievalUrl": "https://provider.example/piece/bafkzcib...",
-        "role": "primary"
-      }
-    ]
-  }
-}
-```
-
-## Current scope
-
-- Calibration only.
-- MetaMask account and network detection.
-- Wallet-owned FOC data set and Piece discovery through public chain reads.
-- Manual health checks and a built-in signed receiver.
-- No mainnet support, payment alerts, or third-party notification channels yet.
+`webhook.test` proves connectivity only and is never represented as a Filecoin health event.
 
 ## Security boundary
 
-The web service has no wallet key. A wallet check rebuilds provider and retrieval information from the connected address's onchain data sets; it does not trust browser-supplied data set IDs or provider URLs. Webhook requests are signed over `timestamp + "." + rawBody` with HMAC-SHA256. Valid signed receiver traffic is not throttled during large scheduled runs; invalid signatures remain IP-rate-limited. Scheduled Piece checks use bounded concurrency to protect RPC and providers. Public RPC/retrieval routes are rate-limited. Unscoped delivery history and caller-supplied webhook targets require the admin key when configured. Webhook URLs also pass HTTPS, credential, DNS, reserved-network, and private-network checks.
+- The Web service has no wallet private key.
+- Upload bytes travel directly from the browser to FOC providers.
+- Wallet checks rebuild ownership and provider information from public chain state.
+- Browser-supplied data-set IDs and Retrieval URLs are not trusted by wallet checks.
+- Schedule changes require a fresh signature from the same wallet and reject replay.
+- Webhook targets pass protocol, credential, DNS, reserved-network, and private-network checks.
+- Custom targets and unscoped operational data require the admin key in production.
+- Signed receiver traffic is not throttled during large valid batches; invalid signatures are separately rate-limited.
+- Scheduled Piece checks use bounded concurrency to protect RPC endpoints and providers.
+- Public reads, health checks, monitor writes, and Webhook writes use separate rate limits.
+
+## Deployment
+
+The repository includes a multi-stage production `Dockerfile` and `railway.json` health-check configuration.
+
+Production requires:
+
+- A random `PROOFHOOK_WEBHOOK_SECRET`.
+- `PROOFHOOK_ALLOW_PRIVATE_WEBHOOK_URLS=false`.
+- A persistent volume mounted at `/app/data`.
+- One service replica while the MVP uses JSON persistence and an in-process scheduler.
+
+Railway supplies `RAILWAY_PUBLIC_DOMAIN` automatically. On another platform, set `PROOFHOOK_PUBLIC_URL` explicitly.
+
+See [docs/deployment.md](docs/deployment.md) for the complete deployment runbook.
+
+## Demo and submission material
+
+- [80-second end-to-end demo](docs/demo-script.md)
+- [Four feature-specific 60-90 second video scripts](docs/demo-videos.md)
+- [Hackathon submission notes](docs/submission.md)
+- [Deployment runbook](docs/deployment.md)
+
+## Brand assets
+
+- [Proofhook mark](public/proofhook-mark.svg): a verified proof node flowing into a Webhook path.
+- [Official FOC mark](public/foc-logo.svg): extracted from the public [Filecoin Onchain Cloud documentation](https://docs.filecoin.cloud/).
+- [MetaMask fox](public/metamask-fox.svg): displayed only on wallet controls.
+
+Proofhook keeps its product mark separate from the official FOC mark so the interface communicates ecosystem integration without implying that Proofhook is the official Filecoin Cloud application.
+
+## MVP boundaries
+
+- Filecoin Calibration only.
+- One built-in signed receiver in the public UI.
+- JSON persistence on a single Railway instance.
+- At most 25 wallet data sets and 500 active Pieces per data set per query.
+- Uploads request two copies, but a partial provider failure can still require manual repair.
+- Paid repair requires MetaMask and cannot run unattended while the wallet is offline.
+- Mainnet, session-key repair, multi-instance scheduling, payment alerts, and hosted notification channels are outside this hackathon MVP.
+
+## Technology
+
+- TypeScript and Node.js 24 in production
+- Fastify 5
+- Synapse SDK and `@filoz/synapse-core`
+- Viem
+- MetaMask
+- Filecoin Calibration and PDP
+- Railway

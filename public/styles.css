@@ -41,7 +41,7 @@ button { letter-spacing: 0; }
 .header-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; }
 .brand-cluster { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-size: 17px; font-weight: 700; }
-.brand-mark { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid #4b5764; background: #fff; color: #182029; font-size: 14px; }
+.brand-mark { width: 28px; height: 28px; display: block; flex: 0 0 auto; }
 .brand-divider { width: 1px; height: 24px; background: #4b5764; }
 .foc-brand { min-width: 0; display: inline-flex; align-items: center; gap: 8px; color: #d3dae2; text-decoration: none; font-size: 12px; font-weight: 650; }
 .foc-brand:hover { color: #fff; }

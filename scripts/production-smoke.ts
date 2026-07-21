@@ -43,10 +43,12 @@ assert(health.status === 200 && health.body.ok === true, 'health endpoint is rea
 const appPage = await request('/')
 const appBundle = await request('/app.bundle.js')
 const focLogo = await request('/foc-logo.svg')
+const proofhookLogo = await request('/proofhook-mark.svg')
 assert(
   appPage.status === 200 &&
     appPage.text.includes('Filecoin Onchain Cloud documentation') &&
     appPage.text.includes('/foc-logo.svg') &&
+    appPage.text.includes('/proofhook-mark.svg') &&
     appPage.text.includes('Filecoin storage health') &&
     appPage.text.includes('Check health') &&
     appPage.text.includes('Upload to FOC') &&
@@ -69,6 +71,12 @@ assert(
     focLogo.text.includes('<svg') &&
     focLogo.text.includes('#0090FF'),
   'official FOC logo is deployed locally'
+)
+assert(
+  proofhookLogo.status === 200 &&
+    proofhookLogo.text.includes('<circle') &&
+    proofhookLogo.text.includes('#0090FF'),
+  'Proofhook verified-event logo is deployed locally'
 )
 assert(
   appBundle.status === 200 &&
