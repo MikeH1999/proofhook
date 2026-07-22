@@ -208,6 +208,21 @@
               </tbody>
             </table>
           </div>
+          <div class="delivery-pagination" id="delivery-pagination" hidden>
+            <span class="pagination-range" id="delivery-range" aria-live="polite">Showing 1-5 of 0 runs</span>
+            <div class="pagination-controls">
+              <label for="delivery-page-size">Rows per page</label>
+              <select id="delivery-page-size" aria-label="Rows per page">
+                <option value="5" selected>5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+              <button class="pagination-button" id="delivery-previous" type="button" title="Previous page" aria-label="Previous page" disabled>&larr;</button>
+              <span class="pagination-page" id="delivery-page-label">Page 1 of 1</span>
+              <button class="pagination-button" id="delivery-next" type="button" title="Next page" aria-label="Next page" disabled>&rarr;</button>
+            </div>
+          </div>
         </section>
 
         <section class="section-block payload-section">

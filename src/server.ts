@@ -211,7 +211,7 @@ app.get('/api/wallet/:address/monitor', walletReadLimit, async (request, reply) 
     const params = z.object({ address: walletAddressSchema }).parse(request.params)
     return {
       monitor: publicMonitor(monitorStore.get(params.address)),
-      runs: monitorStore.listRuns(params.address, 20),
+      runs: monitorStore.listRuns(params.address, 100),
     }
   } catch (error) {
     return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) })

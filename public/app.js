@@ -2,6 +2,7 @@ import { Synapse, calibration } from '@filoz/synapse-sdk'
 import { getEndorsedProviderIds } from '@filoz/synapse-core/endorsements'
 import * as Piece from '@filoz/synapse-core/piece'
 import { custom, getAddress, stringToHex } from 'viem'
+import { MONITOR_PAGE_SIZES, paginate } from '../src/domain/pagination.ts'
 
 const CALIBRATION_CHAIN_ID = '0x4cb2f'
 const CALIBRATION_CHAIN_ID_DECIMAL = 314159
@@ -16,6 +17,8 @@ const state = {
   health: null,
   monitor: null,
   monitorRuns: [],
+  monitorPage: 1,
+  monitorPageSize: MONITOR_PAGE_SIZES[0],
   loadVersion: 0,
   uploading: false,
   repairing: false,
@@ -50,6 +53,12 @@ const elements = {
   providerRows: document.querySelector('#provider-rows'),
   deliveryCount: document.querySelector('#delivery-count'),
   deliveryRows: document.querySelector('#delivery-rows'),
+  deliveryPagination: document.querySelector('#delivery-pagination'),
+  deliveryRange: document.querySelector('#delivery-range'),
+  deliveryPageSize: document.querySelector('#delivery-page-size'),
+  deliveryPrevious: document.querySelector('#delivery-previous'),
+  deliveryPageLabel: document.querySelector('#delivery-page-label'),
+  deliveryNext: document.querySelector('#delivery-next'),
   payloadView: document.querySelector('#payload-view'),
   signatureState: document.querySelector('#signature-state'),
   monitorInterval: document.querySelector('#monitor-interval'),
@@ -246,6 +255,7 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   state.health = null
   state.monitor = null
   state.monitorRuns = []
+  state.monitorPage = 1
 
   elements.walletScope.textContent = message
   elements.pieceSelect.disabled = true
@@ -261,6 +271,7 @@ function clearWalletData(message = 'Connect MetaMask to discover Filecoin data s
   elements.providerRows.innerHTML = `<tr><td colspan="6" class="empty-cell">${escapeHtml(message)}</td></tr>`
   elements.deliveryCount.textContent = '0 runs'
   elements.deliveryRows.innerHTML = '<tr><td colspan="8" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
+  elements.deliveryPagination.hidden = true
   elements.payloadView.textContent = 'Select a scheduled run to inspect every PieceCID and provider copy.'
   elements.signatureState.textContent = 'No run selected'
   elements.signatureState.className = 'signature-state'
@@ -390,13 +401,24 @@ function renderMonitor() {
 }
 
 function renderMonitorRuns() {
-  elements.deliveryCount.textContent = `${state.monitorRuns.length} ${state.monitorRuns.length === 1 ? 'run' : 'runs'}`
-  if (state.monitorRuns.length === 0) {
+  const totalRuns = state.monitorRuns.length
+  elements.deliveryCount.textContent = `${totalRuns} ${totalRuns === 1 ? 'run' : 'runs'}`
+  if (totalRuns === 0) {
     elements.deliveryRows.innerHTML = '<tr><td colspan="8" class="empty-cell">No scheduled health runs for this wallet.</td></tr>'
+    elements.deliveryPagination.hidden = true
     return
   }
-  elements.deliveryRows.innerHTML = state.monitorRuns.map((run, index) => {
+  const page = paginate(state.monitorRuns, state.monitorPage, state.monitorPageSize)
+  state.monitorPage = page.page
+  elements.deliveryPagination.hidden = false
+  elements.deliveryRange.textContent = `Showing ${page.start + 1}-${page.end} of ${totalRuns} runs`
+  elements.deliveryPageSize.value = String(page.pageSize)
+  elements.deliveryPageLabel.textContent = `Page ${page.page} of ${page.pageCount}`
+  elements.deliveryPrevious.disabled = state.monitorPage === 1
+  elements.deliveryNext.disabled = state.monitorPage === page.pageCount
+  elements.deliveryRows.innerHTML = page.items.map((run, index) => {
     const reason = describeMonitorRun(run)
+    const runIndex = page.start + index
     return `
       <tr>
         <td>${escapeHtml(formatDate(run.completedAt))}</td>
@@ -406,7 +428,7 @@ function renderMonitorRuns() {
         <td>${run.healthyCopyCount}/${run.copyCount}</td>
         <td>${run.webhooksDelivered}/${run.webhooksTotal}</td>
         <td>${run.intervalHours}h</td>
-        <td><button class="row-action" type="button" data-run-index="${index}">View</button></td>
+        <td><button class="row-action" type="button" data-run-index="${runIndex}">View</button></td>
       </tr>
     `
   }).join('')
@@ -421,6 +443,11 @@ function selectMonitorRun(index) {
   elements.signatureState.className = `signature-state ${delivered ? 'signature-ok' : 'signature-failed'}`
 }
 
+function selectFirstMonitorRunOnPage() {
+  const page = paginate(state.monitorRuns, state.monitorPage, state.monitorPageSize)
+  if (page.items.length > 0) selectMonitorRun(page.start)
+}
+
 async function refreshMonitor() {
   if (!state.walletAddress) return
   const address = state.walletAddress
@@ -428,6 +455,7 @@ async function refreshMonitor() {
   if (address !== state.walletAddress) return
   state.monitor = response.monitor
   state.monitorRuns = response.runs
+  state.monitorPage = 1
   renderMonitor()
   renderMonitorRuns()
   if (state.monitorRuns.length > 0) selectMonitorRun(0)
@@ -962,6 +990,27 @@ elements.uploadButton.addEventListener('click', uploadToFoc)
 elements.monitorSave.addEventListener('click', () => saveMonitor(true, true))
 elements.monitorPause.addEventListener('click', () => saveMonitor(false, false))
 elements.monitorInterval.addEventListener('input', updateMonitorAvailability)
+elements.deliveryPageSize.addEventListener('change', () => {
+  const pageSize = Number(elements.deliveryPageSize.value)
+  if (!MONITOR_PAGE_SIZES.includes(pageSize)) return
+  state.monitorPageSize = pageSize
+  state.monitorPage = 1
+  renderMonitorRuns()
+  selectFirstMonitorRunOnPage()
+})
+elements.deliveryPrevious.addEventListener('click', () => {
+  if (state.monitorPage <= 1) return
+  state.monitorPage -= 1
+  renderMonitorRuns()
+  selectFirstMonitorRunOnPage()
+})
+elements.deliveryNext.addEventListener('click', () => {
+  const pageCount = paginate(state.monitorRuns, state.monitorPage, state.monitorPageSize).pageCount
+  if (state.monitorPage >= pageCount) return
+  state.monitorPage += 1
+  renderMonitorRuns()
+  selectFirstMonitorRunOnPage()
+})
 elements.copyCid.addEventListener('click', async () => {
   if (!state.selectedPiece) return
   await navigator.clipboard.writeText(state.selectedPiece.pieceCid)

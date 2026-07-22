@@ -175,6 +175,15 @@ td code { font-size: 12px; }
 .empty-cell { height: 92px; color: var(--muted); text-align: center; }
 .row-action { padding: 5px 8px; border: 0; background: transparent; color: var(--blue); cursor: pointer; font-size: 12px; font-weight: 700; }
 .run-reason { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.delivery-pagination { min-height: 58px; padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 12px; }
+.delivery-pagination[hidden] { display: none; }
+.pagination-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.pagination-controls label { white-space: nowrap; }
+.pagination-controls select { height: 34px; padding: 0 28px 0 9px; border: 1px solid #aeb7c1; border-radius: 4px; background: #fff; color: var(--ink); font-size: 12px; }
+.pagination-button { width: 34px; height: 34px; padding: 0; border: 1px solid #b9c1ca; border-radius: 4px; background: #fff; color: var(--ink); cursor: pointer; font-size: 18px; line-height: 1; }
+.pagination-button:hover:not(:disabled) { background: #f4f6f8; border-color: #8995a1; }
+.pagination-button:disabled { color: #aeb7c1; cursor: not-allowed; opacity: .65; }
+.pagination-page { min-width: 76px; color: var(--ink); text-align: center; white-space: nowrap; }
 
 .payload-section pre { min-height: 260px; max-height: 460px; margin: 0; padding: 18px; overflow: auto; border: 1px solid #303a44; background: #182029; color: #dce5ee; font: 12px/1.65 "SFMono-Regular", Consolas, "Liberation Mono", monospace; white-space: pre-wrap; word-break: break-word; }
 .toast { position: fixed; right: 20px; bottom: 20px; max-width: min(380px, calc(100% - 40px)); padding: 11px 14px; border: 1px solid #303a44; border-radius: 5px; background: #182029; color: #fff; font-size: 13px; opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
@@ -224,4 +233,8 @@ td code { font-size: 12px; }
   .brand-cluster { gap: 8px; }
   .brand-divider { height: 22px; }
   .foc-brand span { display: none; }
+  .delivery-pagination { align-items: stretch; flex-direction: column; gap: 12px; }
+  .pagination-controls { justify-content: space-between; flex-wrap: wrap; }
+  .pagination-controls label { flex: 1 0 100%; }
+  .pagination-page { flex: 1 0 auto; }
 }

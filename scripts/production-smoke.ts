@@ -63,7 +63,9 @@ assert(
     appPage.text.includes('Test webhook') &&
     appPage.text.includes('<th>Reason</th>') &&
     appPage.text.includes('Check every copy automatically') &&
-    appPage.text.includes('Health run groups'),
+    appPage.text.includes('Health run groups') &&
+    appPage.text.includes('Rows per page') &&
+    appPage.text.includes('<option value="50">50</option>'),
   'FOC upload and scheduled monitor UI are deployed'
 )
 assert(

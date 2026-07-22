@@ -90,6 +90,7 @@ Offline monitoring does not authorize paid repair. Repair still requires a new M
 - Retry delivery with bounded delays of 0, 2, and 5 seconds.
 - Display HTTP status, attempt count, response excerpt, duration, and signature verification.
 - Group every scheduled interval by overall state, reason, Piece count, verified-copy count, and Webhook totals.
+- Paginate recent Health run groups with 5 rows by default and selectable 5, 10, 20, or 50 rows per page.
 - Include a built-in HMAC-verified receiver for the public demo.
 - Allow caller-supplied Webhook targets only through admin-protected API routes.
 
@@ -151,7 +152,7 @@ The implementation moved from a narrow receipt demo to a wallet-scoped FOC utili
 8. Added bounded concurrency and Webhook retry behavior to avoid provider and receiver bursts.
 9. Added SSRF protection, admin-only custom targets, wallet authorization replay protection, and rate limits.
 10. Added provider Retrieval URL links, English date formatting, responsive controls, status explanations, and loading states.
-11. Reorganized the UI around the user workflow and added Proofhook and official FOC branding.
+11. Reorganized the UI around the user workflow, added Proofhook and official FOC branding, and added Health run pagination.
 
 ## Live Calibration evidence
 
@@ -213,7 +214,7 @@ The running Web service does not read `FILECOIN_PRIVATE_KEY`. That optional valu
 | Command | Purpose |
 | --- | --- |
 | `npm.cmd run dev` | Start the development server with reload. |
-| `npm.cmd run verify` | Type-check, run 21 tests, build, and run the high-severity dependency audit. |
+| `npm.cmd run verify` | Type-check, run 26 tests, build, and run the high-severity dependency audit. |
 | `npm.cmd run verify:live` | Run `verify` plus a real public Calibration Piece check. |
 | `npm.cmd run smoke:production` | Exercise the deployed UI, APIs, real Piece health, HMAC receiver, permissions, and rate limits. |
 | `npm.cmd run build` | Build the server and bundled browser application. |
